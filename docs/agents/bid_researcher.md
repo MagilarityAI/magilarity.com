@@ -91,7 +91,7 @@ Each downloaded file is classified by publication date relative to tender timeli
 | `winner` | date > awards[0].date | `документи_переможця_4_дні/` |
 | `signing` | after complaint period | `документи_підписання/` |
 
-## Technical Specification Comparison (GPT-5.1)
+## Technical Specification Comparison (Vision LLM)
 
 For technical goods and construction:
 - PDF pages → PNG images (PyMuPDF)
@@ -100,7 +100,7 @@ For technical goods and construction:
 - Detects: deviations, added clauses, omissions
 - Result: `technical_specs_compliance[]` with severity (`critical` / `substantial`)
 
-## Document Content Verification (Gemini 2.5 Flash)
+## Document Content Verification (Analysis LLM)
 
 Deep verification for documents where presence alone is insufficient:
 

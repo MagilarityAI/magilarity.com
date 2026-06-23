@@ -96,14 +96,13 @@ Avoids anchoring on few-shot examples by splitting into two independent calls:
 | max_tokens | 30,000 | 65,000 |
 | Output | `document_blocks` | 18 other JSON sections |
 
-**Provider benchmarks (21 production runs):**
+**Benchmark results (21 production runs):**
 
-| Task | Optimal model | Evidence |
-|------|--------------|---------|
-| Checklist (Call A) | Gemini 2.5 Flash | Run 10: 13 blocks, 57 items |
-| Hidden requirements | Gemini 2.5 Flash | Gemini=13 vs GPT=fewer |
-| Contract analysis | GPT-5.1 | Runs 12-18: 4 violations, 7-9 appeal grounds |
-| Classification | Gemini 3.1 Flash Lite | Fast and cost-effective |
+| Task | Best result |
+|------|------------|
+| Checklist (Call A) | Run 10: 13 blocks, 57 items |
+| Hidden requirements | Up to 13 per tender |
+| Contract analysis | 4 violations, 7-9 appeal grounds (stable) |
 
 ## Donor Program Detection
 
@@ -145,8 +144,8 @@ Automatically detects 7 international donor programs and applies supplemental an
 
 Reference tender: UA-2025-07-14-001945-a (212M UAH construction, 57 files)
 
-| Run | Provider | Violations | Hidden req. | Appeal grounds | Duration |
-|-----|----------|-----------|------------|----------------|---------|
-| 10 (best) | Gemini | 13 | 13 | 13 | 721s |
-| 18 (best GPT) | GPT-5.1 | 4 | — | 12 | — |
-| Typical Gemini | Gemini | 8-13 | 7-13 | 5-13 | ~12 min |
+| Run | Violations | Hidden req. | Appeal grounds | Duration |
+|-----|-----------|------------|----------------|---------|
+| 10 (best) | 13 | 13 | 13 | 721s |
+| 18 | 4 | — | 12 | — |
+| Typical | 8-13 | 7-13 | 5-13 | ~12 min |

@@ -51,52 +51,6 @@ Tender index and analysis results.
 | `bid_analysis` | Bid compliance results |
 | `td_requirements` | Tender requirement database (for TD generator) |
 
-## AI Models
-
-| Model | Provider | Role |
-|-------|----------|------|
-| `gemini-2.5-flash` | Google | Primary analysis — tender docs, contract review |
-| `gemini-3.1-flash-lite` | Google | Document indexing, fast classification |
-| `gpt-5.1` | OpenAI | Technical specification comparison (vision, PDF scans) |
-| `claude-opus-4-7` | Anthropic | Tender analysis (alternative provider) |
-| `claude-sonnet-4-6` | Anthropic | Classification, report structuring |
-
-## Environment Variables
-
-```bash
-# LLM providers
-LLM_PROVIDER=gemini          # gemini | openai | claude
-GEMINI_API_KEY=...           # for classification role
-GEMINI_API_KEY_2=...         # for analysis role (separate quota)
-OPENAI_API_KEY=...           # for GPT-5.1 technical spec comparison
-ANTHROPIC_API_KEY=...        # for Claude provider
-
-# Databases
-POSTGRES_DB=appdb
-POSTGRES_USER=...
-POSTGRES_PASSWORD=...
-
-MEMORY_DB_NAME=magilarity_agent_memory
-MEMORY_DB_HOST=localhost
-MEMORY_DB_PORT=5432
-MEMORY_DB_USER=...
-MEMORY_DB_PASSWORD=...
-
-TENDERS_DB_NAME=prozorro_intel
-TENDERS_DB_HOST=localhost
-TENDERS_DB_PORT=5432
-```
-
-## Rate Limits & Performance
-
-| Provider | Tier | Limits | Notes |
-|----------|------|--------|-------|
-| Gemini | Free | 250K TPM, 10 RPM, 250 RPD | ~62 full analyses/day |
-| Gemini | Paid | Higher | Target for production |
-| GPT-5.1 | Paid | Per token | Used only for tech spec comparison |
-
-Retry logic: exponential backoff, up to 13 attempts. 503 from Gemini detected by string matching (not exception type).
-
 ## CI/CD
 
 GitHub Actions pipeline:

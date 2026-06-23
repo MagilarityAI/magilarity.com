@@ -122,8 +122,7 @@ Processes decisions of Ukraine's Procurement Appeals Body (ООПЗ) and builds 
 
 | Layer | Technology |
 |-------|-----------|
-| **Primary LLM** | Gemini 2.5 Flash (analysis), Gemini 3.1 Flash Lite (indexing) |
-| **Secondary LLM** | GPT-5.1 (technical spec comparison via vision), Claude Opus 4 (tender analysis) |
+| **LLM** | Multi-provider: Google, OpenAI, Anthropic — routed by task type |
 | **Backend** | Python 3.11, multi-agent orchestration |
 | **Document processing** | python-docx, pdfplumber, PyMuPDF (PDF→PNG), openpyxl, Tesseract OCR |
 | **Databases** | PostgreSQL — legislation DB (54 tables, ~3.6M documents), agent memory DB |
