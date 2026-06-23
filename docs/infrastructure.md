@@ -15,7 +15,7 @@ Legislative database for the Ukrainian jurisdiction.
 
 | Contents | Scale |
 |----------|-------|
-| Ukrainian legislation full text | ~3.6M documents |
+| Ukrainian legislation full text | ~340,000 normative documents |
 | ООПЗ decisions | 2,000+ decisions |
 | АМКУ decisions | Indexed |
 | Court decisions | Indexed |

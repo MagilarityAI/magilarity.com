@@ -40,7 +40,7 @@ tender_doc_researcher → uses precedents when analyzing new tenders
 The model is prohibited from inventing facts. Every claim must be supported by a direct quote from the decision text.
 
 **Factor 2 (Legal validation):**  
-All statutory references are verified against the full Ukrainian legislation database (~3.6M documents in `appdb`). References to non-existent articles are flagged.
+All statutory references are verified against the full Ukrainian legislation database (~340,000 normative documents in `appdb`). References to non-existent articles are flagged.
 
 ## Quality Scoring
 

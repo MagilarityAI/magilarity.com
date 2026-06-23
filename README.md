@@ -138,7 +138,7 @@ Processes decisions of Ukraine's Procurement Appeals Body (ООПЗ) and builds 
 | Source | Purpose |
 |--------|---------|
 | **Prozorro Public API v2.5** | Tender data, participant bids, documents |
-| **Verkhovna Rada** (`data.rada.gov.ua`) | Ukrainian legislation database — 3.6M+ documents |
+| **Verkhovna Rada** (`data.rada.gov.ua`) | Ukrainian legislation database — 340,000+ normative documents |
 | **ООПЗ decisions** | Procurement appeals body regulatory database (2000+ decisions) |
 | **АМКУ decisions** | Anti-monopoly committee rulings |
 
