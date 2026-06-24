@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>document.documentElement.classList.add('js');</script>
+<title>Magilarity — AI legal analysis of public procurement</title>
+<meta name="description" content="Magilarity is a production multi-agent AI platform for automated legal analysis of Ukraine's public procurement — surfacing hidden discriminatory requirements, collusion and one-sided contracts from a single tender number.">
+<meta name="keywords" content="ProZorro, public procurement, tender analysis, legal AI, Ukraine, antitrust, AMCU, OOPZ, Magilarity">
+<meta name="author" content="Magilarity">
+<link rel="canonical" href="https://magilarity.com/">
+<meta name="theme-color" content="#141A2C">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Magilarity">
+<meta property="og:title" content="Magilarity — AI legal analysis of public procurement">
+<meta property="og:description" content="Enter a tender number, get a full legal analysis. A production multi-agent AI platform for Ukraine's public procurement.">
+<meta property="og:url" content="https://magilarity.com/">
+<meta property="og:image" content="https://magilarity.com/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Magilarity — AI legal analysis of public procurement">
+<meta name="twitter:description" content="Enter a tender number, get a full legal analysis. Multi-agent AI for Ukraine's public procurement.">
+<meta name="twitter:image" content="https://magilarity.com/og-image.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23141A2C'/%3E%3Cg transform='rotate(-18 16 16)'%3E%3Cpath d='M15 10.5 C21 9.5 25.5 12.5 25.5 16' stroke='%23E0A33E' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Cpath d='M17 21.5 C11 22.5 6.5 19.5 6.5 16' stroke='%23E0A33E' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3C/g%3E%3Ccircle cx='16' cy='16' r='3.4' fill='%23F6D38C'/%3E%3Ccircle cx='16' cy='16' r='1.1' fill='%23FFFDF7'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<style>
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:#141A2C;color:#F2F3F8;font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  a{color:inherit}
+  @keyframes scanY{from{top:6%;opacity:.25}50%{opacity:.95}to{top:88%;opacity:.25}}
+  @keyframes pulse{0%,100%{opacity:.35;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
+  @keyframes gxspin{to{transform:rotate(360deg)}}
+  @keyframes gxcore{0%,100%{transform:scale(.9);opacity:.85}50%{transform:scale(1.12);opacity:1}}
+  @keyframes gxtwinkle{0%,100%{opacity:.25}50%{opacity:1}}
+  .gx-tilt{transform-box:fill-box;transform-origin:center;transform:rotate(-18deg)}
+  .gx-spin{transform-box:fill-box;transform-origin:center;animation:gxspin 32s linear infinite}
+  .gx-core{transform-box:fill-box;transform-origin:center;animation:gxcore 3.6s ease-in-out infinite}
+  .gx-star{transform-box:fill-box;transform-origin:center;animation:gxtwinkle 3s ease-in-out infinite}
+  .gx-star:nth-of-type(2){animation-delay:.6s}.gx-star:nth-of-type(3){animation-delay:1.2s}.gx-star:nth-of-type(4){animation-delay:1.8s}.gx-star:nth-of-type(5){animation-delay:.9s}
+  [data-reveal]{transition:opacity .7s cubic-bezier(.16,.84,.44,1),transform .7s cubic-bezier(.16,.84,.44,1)}
+  .js [data-reveal]{opacity:0;transform:translateY(24px)}
+  [data-reveal].in{opacity:1 !important;transform:none !important}
+  @media (prefers-reduced-motion: reduce){
+    [data-reveal]{opacity:1 !important;transform:none !important;transition:none}
+    *{animation-duration:.001ms !important;animation-iteration-count:1 !important}
+  }
+  /* ---- Tablet ---- */
+  @media (max-width: 980px){
+    [style*="repeat(5, 1fr)"]{grid-template-columns:1fr 1fr 1fr !important}
+    [style*="1.15fr .85fr"]{grid-template-columns:1fr !important}
+    [style*=".8fr 1.2fr"]{grid-template-columns:1fr !important}
+  }
+  /* ---- Mobile ---- */
+  @media (max-width: 768px){
+    nav{padding-left:20px !important;padding-right:20px !important}
+    nav a[href="#output"], nav a[href="#agents"], nav a[href="#roadmap"], nav [style*="width:1px"]{display:none !important}
+    header[id="top"]{padding:64px 20px 72px !important}
+    [style*="104px 48px"]{padding-left:20px !important;padding-right:20px !important;padding-top:72px !important;padding-bottom:72px !important}
+    [style*="100px 48px"]{padding-left:20px !important;padding-right:20px !important;padding-top:64px !important;padding-bottom:64px !important}
+    [style*="64px 48px 40px"]{padding-left:20px !important;padding-right:20px !important}
+    h1{font-size:42px !important}
+    h2{font-size:32px !important}
+    [style*="repeat(3, 1fr)"]{grid-template-columns:1fr !important}
+    [style*="repeat(5, 1fr)"]{grid-template-columns:1fr 1fr !important}
+    [style*="repeat(4, 1fr)"]{grid-template-columns:1fr 1fr !important}
+    [style*="1.15fr .85fr"]{grid-template-columns:1fr !important;gap:36px !important}
+    [style*="auto 1fr"]{gap:24px !important}
+    [style*="font-size:34px"]{font-size:26px !important}
+  }
+  @media (max-width: 480px){
+    [style*="repeat(5, 1fr)"], [style*="repeat(4, 1fr)"]{grid-template-columns:1fr !important}
+    h1{font-size:34px !important}
+    h2{font-size:27px !important}
+    [style*="font-size:62px"]{font-size:34px !important}
+  }
+</style>
+</head>
+<body>
+<div id="magi-root" style="background:#141A2C; color:#F2F3F8; font-family:'Inter',sans-serif; position:relative; min-height:100vh; overflow:hidden;">
+
+  <nav style="position:sticky; top:0; z-index:50; display:flex; align-items:center; justify-content:space-between; padding:18px 48px; background:rgba(20,26,44,.72); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-bottom:1px solid rgba(42,49,80,.6);">
+    <a href="#top" style="display:flex; align-items:center; gap:13px; text-decoration:none;">
+      <span style="display:inline-flex; width:36px; height:36px; align-items:center; justify-content:center;"><svg width="36" height="36" viewBox="0 0 64 64" fill="none" style="overflow:visible; filter:drop-shadow(0 0 8px rgba(224,163,62,.4));"><defs><radialGradient id="gxc-n" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#FFFDF7"/><stop offset=".35" stop-color="#FBE3A8"/><stop offset=".7" stop-color="#E0A33E" stop-opacity=".55"/><stop offset="1" stop-color="#E0A33E" stop-opacity="0"/></radialGradient><linearGradient id="gxa-n" x1="8" y1="20" x2="56" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#F6D38C"/><stop offset=".55" stop-color="#E0A33E"/><stop offset="1" stop-color="#8E7BE6" stop-opacity=".7"/></linearGradient></defs><g class="gx-tilt"><g class="gx-spin"><ellipse cx="32" cy="32" rx="27" ry="12" stroke="#7A6CCB" stroke-width=".7" stroke-opacity=".35" fill="none"/><path d="M30 25 C44 23 55 28 55 33 C55 37.5 49 41 42.5 40.5" stroke="url(#gxa-n)" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M34 39 C20 41 9 36 9 31 C9 26.5 15 23 21.5 23.5" stroke="url(#gxa-n)" stroke-width="1.8" stroke-linecap="round" fill="none"/></g></g><g class="gx-core"><circle cx="32" cy="32" r="13" fill="url(#gxc-n)"/><circle cx="32" cy="32" r="2.4" fill="#FFFDF7"/></g><circle class="gx-star" cx="13" cy="13" r="1.1" fill="#EAF1FF"/><circle class="gx-star" cx="53" cy="15" r="1.3" fill="#FBE3A8"/><circle class="gx-star" cx="55" cy="50" r="1" fill="#EAF1FF"/><circle class="gx-star" cx="11" cy="48" r="1.1" fill="#C9BCFF"/><circle class="gx-star" cx="44" cy="9" r=".8" fill="#FFFDF7"/></svg></span>
+      <span style="font-family:'Spectral',serif; font-weight:500; font-size:21px; letter-spacing:.30em; color:#F4F2EC; text-shadow:0 0 22px rgba(224,163,62,.20);">MAGILARITY</span>
+    </a>
+    <div style="display:flex; align-items:center; gap:30px;">
+      <a href="#output" data-ua="Platform" style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.06em; color:#9CA1B8; text-decoration:none;">Platform</a>
+      <a href="#agents" data-ua="Agents" style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.06em; color:#9CA1B8; text-decoration:none;">Agents</a>
+      <a href="#roadmap" data-ua="Roadmap" style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.06em; color:#9CA1B8; text-decoration:none;">Roadmap</a>
+      <span style="width:1px; height:16px; background:#2A3150;"></span>
+      <span style="display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:13px;">
+        <span data-lang-btn="en" style="color:#F2F3F8; font-weight:600;">EN</span>
+        <span style="opacity:.35;">/</span>
+        <span data-lang-btn="ua" style="color:#6E7493; font-weight:500;">UA</span>
+      </span>
+    </div>
+  </nav>
+
+  <header id="top" style="position:relative; padding:96px 48px 104px; max-width:1280px; margin:0 auto;">
+    <div style="position:absolute; inset:0; background:radial-gradient(58% 70% at 86% 8%, rgba(224,163,62,.10), transparent 46%), radial-gradient(70% 80% at 2% -8%, rgba(72,88,170,.22), transparent 52%); pointer-events:none;"></div>
+    <div style="position:relative; display:grid; grid-template-columns:1.15fr .85fr; gap:56px; align-items:center;">
+      <div data-reveal>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; letter-spacing:.24em; text-transform:uppercase; color:#E0A33E; margin-bottom:26px;">Magic&nbsp;+&nbsp;Clarity</div>
+        <h1 style="font-family:'Spectral',serif; font-weight:300; font-size:62px; line-height:1.07; letter-spacing:-.012em; color:#F4F5FA; margin:0 0 26px;"><span data-ua="Юридична прозорість публічних закупівель,">Legal clarity for public procurement,</span> <span style="font-style:italic; color:#fff;" data-ua="зі швидкістю машини.">at machine speed.</span></h1>
+        <p style="font-size:18px; line-height:1.62; color:#9CA1B8; max-width:500px; margin:0 0 38px;" data-ua="Робоча мультиагентна AI-платформа для автоматизованого юридичного аналізу публічних закупівель України — виявляє те, що навмисно приховано.">A production multi-agent AI platform for automated legal analysis of Ukraine&rsquo;s public procurement &mdash; surfacing what is deliberately hidden.</p>
+        <div style="display:flex; gap:14px; align-items:center; flex-wrap:wrap;">
+          <a href="#problem" style="display:inline-flex; align-items:center; gap:9px; font-size:15px; font-weight:600; color:#141A2C; background:#E0A33E; padding:15px 26px; border-radius:3px; text-decoration:none;"><span data-ua="Дослідити платформу">Explore the platform</span> <i class="fa-solid fa-arrow-down" style="font-size:12px;"></i></a>
+          <a href="/cdn-cgi/l/email-protection#98f1f6fef7d8f5f9fff1f4f9eaf1ece1b6fbf7f5" style="font-family:'JetBrains Mono',monospace; font-size:14px; color:#C7CBDB; border:1px solid #2A3150; padding:14px 22px; border-radius:3px; text-decoration:none;"><span class="__cf_email__" data-cfemail="7811161e173815191f1114190a110c01561b1715">[email&#160;protected]</span></a>
+        </div>
+      </div>
+
+      <div data-reveal style="position:relative; height:420px; border:1px solid #303860; border-radius:4px; background:linear-gradient(180deg, rgba(30,37,64,.55), rgba(18,23,42,.55)); overflow:hidden;">
+        <div style="position:absolute; left:0; right:0; height:2px; background:linear-gradient(90deg, transparent, rgba(224,163,62,.9), transparent); animation:scanY 3.6s ease-in-out infinite; box-shadow:0 0 14px rgba(224,163,62,.6);"></div>
+        <div style="position:absolute; inset:42px 46px; display:flex; flex-direction:column; gap:14px;">
+          <div style="height:8px; width:62%; border-radius:2px; background:#33406A;"></div>
+          <div style="height:8px; width:92%; border-radius:2px; background:#283155;"></div>
+          <div style="height:8px; width:84%; border-radius:2px; background:#283155;"></div>
+          <div style="position:relative; height:8px; width:74%; border-radius:2px; background:rgba(224,163,62,.85);"><span style="position:absolute; right:-16px; top:-4px; width:15px; height:15px; border-radius:50%; background:#E0A33E; box-shadow:0 0 0 4px rgba(224,163,62,.18); animation:pulse 2.4s ease-in-out infinite;"></span></div>
+          <div style="height:8px; width:88%; border-radius:2px; background:#283155;"></div>
+          <div style="height:8px; width:79%; border-radius:2px; background:#283155;"></div>
+          <div style="position:relative; height:8px; width:66%; border-radius:2px; background:rgba(225,75,75,.72);"><span style="position:absolute; right:-16px; top:-4px; width:15px; height:15px; border-radius:50%; background:#E14B4B; box-shadow:0 0 0 4px rgba(225,75,75,.16); animation:pulse 2.4s .8s ease-in-out infinite;"></span></div>
+          <div style="height:8px; width:90%; border-radius:2px; background:#283155;"></div>
+          <div style="height:8px; width:58%; border-radius:2px; background:#283155;"></div>
+          <div style="height:8px; width:83%; border-radius:2px; background:#283155;"></div>
+          <div style="position:relative; height:8px; width:70%; border-radius:2px; background:rgba(52,211,153,.6);"><span style="position:absolute; right:-16px; top:-4px; width:15px; height:15px; border-radius:50%; background:#34D399; box-shadow:0 0 0 4px rgba(52,211,153,.16); animation:pulse 2.4s 1.4s ease-in-out infinite;"></span></div>
+          <div style="height:8px; width:86%; border-radius:2px; background:#283155;"></div>
+        </div>
+        <div style="position:absolute; bottom:16px; left:46px; display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.1em; color:#6B72A0;"><span style="width:6px; height:6px; border-radius:50%; background:#34D399; box-shadow:0 0 8px #34D399;"></span>X-RAY &middot; clause analysis</div>
+      </div>
+    </div>
+  </header>
+
+  <section id="problem" style="position:relative; padding:104px 48px; max-width:1280px; margin:0 auto; border-top:1px solid rgba(42,49,80,.5);">
+    <div data-reveal style="max-width:760px;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#E0A33E; margin-bottom:22px;" data-ua="Проблема">The Problem</div>
+      <h2 style="font-family:'Spectral',serif; font-weight:300; font-size:46px; line-height:1.1; letter-spacing:-.01em; color:#F4F5FA; margin:0;"><span style="color:#E0A33E; font-weight:400;" data-ua="8–16 годин">8&ndash;16 hours</span> <span data-ua="роботи юриста на один тендер.">of a lawyer&rsquo;s work per tender.</span></h2>
+    </div>
+
+    <div data-reveal style="display:grid; grid-template-columns:repeat(5, 1fr); gap:1px; margin-top:54px; background:rgba(42,49,80,.5); border:1px solid rgba(42,49,80,.5); border-radius:5px; overflow:hidden;">
+      <div style="background:#161C30; padding:30px 26px;">
+        <div style="width:42px; height:42px; border-radius:6px; background:rgba(225,75,75,.1); border:1px solid rgba(225,75,75,.25); display:flex; align-items:center; justify-content:center; margin-bottom:20px;"><i class="fa-solid fa-user-slash" style="color:#E14B4B; font-size:16px;"></i></div>
+        <div style="font-size:15px; font-weight:600; color:#EDEFF6; margin-bottom:9px; line-height:1.3;" data-ua="Приховані дискримінаційні вимоги">Hidden discriminatory requirements</div>
+        <div style="font-size:13px; line-height:1.5; color:#7A8099;" data-ua="Критерії, що відсікають усіх, крім одного учасника.">Criteria written to exclude all but one bidder.</div>
+      </div>
+      <div style="background:#161C30; padding:30px 26px;">
+        <div style="width:42px; height:42px; border-radius:6px; background:rgba(225,75,75,.1); border:1px solid rgba(225,75,75,.25); display:flex; align-items:center; justify-content:center; margin-bottom:20px;"><i class="fa-solid fa-crosshairs" style="color:#E14B4B; font-size:16px;"></i></div>
+        <div style="font-size:15px; font-weight:600; color:#EDEFF6; margin-bottom:9px; line-height:1.3;" data-ua="Заточені специфікації">Tailored specifications</div>
+        <div style="font-size:13px; line-height:1.5; color:#7A8099;" data-ua="Специфікації, зведені під єдиний продукт.">Specs reverse-engineered from a single product.</div>
+      </div>
+      <div style="background:#161C30; padding:30px 26px;">
+        <div style="width:42px; height:42px; border-radius:6px; background:rgba(225,75,75,.1); border:1px solid rgba(225,75,75,.25); display:flex; align-items:center; justify-content:center; margin-bottom:20px;"><i class="fa-solid fa-people-arrows" style="color:#E14B4B; font-size:16px;"></i></div>
+        <div style="font-size:15px; font-weight:600; color:#EDEFF6; margin-bottom:9px; line-height:1.3;" data-ua="Антиконкурентні змови">Anticompetitive collusion</div>
+        <div style="font-size:13px; line-height:1.5; color:#7A8099;" data-ua="Узгоджені пропозиції, що імітують конкуренцію.">Coordinated bids that fake competition.</div>
+      </div>
+      <div style="background:#161C30; padding:30px 26px;">
+        <div style="width:42px; height:42px; border-radius:6px; background:rgba(225,75,75,.1); border:1px solid rgba(225,75,75,.25); display:flex; align-items:center; justify-content:center; margin-bottom:20px;"><i class="fa-solid fa-scale-unbalanced" style="color:#E14B4B; font-size:16px;"></i></div>
+        <div style="font-size:15px; font-weight:600; color:#EDEFF6; margin-bottom:9px; line-height:1.3;" data-ua="Односторонні договори">One-sided contracts</div>
+        <div style="font-size:13px; line-height:1.5; color:#7A8099;" data-ua="Умови, складені проти постачальника.">Terms stacked against the supplier.</div>
+      </div>
+      <div style="background:#161C30; padding:30px 26px;">
+        <div style="width:42px; height:42px; border-radius:6px; background:rgba(225,75,75,.1); border:1px solid rgba(225,75,75,.25); display:flex; align-items:center; justify-content:center; margin-bottom:20px;"><i class="fa-solid fa-scale-balanced" style="color:#E14B4B; font-size:16px;"></i></div>
+        <div style="font-size:15px; font-weight:600; color:#EDEFF6; margin-bottom:9px; line-height:1.3;" data-ua="Недоступність юридичної допомоги для МСБ">Legal help out of reach for SMBs</div>
+        <div style="font-size:13px; line-height:1.5; color:#7A8099;" data-ua="Години юриста, які МСБ не може оплатити.">Hours of counsel that small business can&rsquo;t afford.</div>
+      </div>
+    </div>
+
+    <div data-reveal style="margin-top:64px; padding:48px 52px; border-radius:6px; background:linear-gradient(120deg, rgba(224,163,62,.07), rgba(30,37,64,.3)); border:1px solid rgba(224,163,62,.2);">
+      <p style="font-family:'Spectral',serif; font-weight:300; font-size:34px; line-height:1.25; color:#F4F5FA; margin:0;"><span style="font-family:'Spectral',serif; font-weight:500; letter-spacing:.04em;">MAGILARITY</span> <span data-ua="автоматизує весь цей процес — від номера тендеру до готової скарги." style="font-style:italic;">automates this entire process &mdash; from a tender number to a ready complaint.</span></p>
+    </div>
+  </section>
+
+  <section id="output" style="position:relative; padding:104px 48px; max-width:1280px; margin:0 auto; border-top:1px solid rgba(42,49,80,.5);">
+    <div data-reveal style="max-width:780px; margin-bottom:54px;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#E0A33E; margin-bottom:22px;" data-ua="Що ви отримуєте">What you get</div>
+      <h2 style="font-family:'Spectral',serif; font-weight:300; font-size:46px; line-height:1.12; letter-spacing:-.01em; color:#F4F5FA; margin:0;" data-ua="Ввів номер тендеру — отримав повний юридичний аналіз.">Enter a tender number &mdash; get a full legal analysis.</h2>
+    </div>
+
+    <div data-reveal style="display:grid; grid-template-columns:repeat(3, 1fr); gap:18px;">
+      <div style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px;">
+        <div style="width:46px; height:46px; border-radius:8px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.26); display:flex; align-items:center; justify-content:center; margin-bottom:22px;"><i class="fa-solid fa-flag" style="color:#E0A33E; font-size:18px;"></i></div>
+        <div style="font-size:18px; font-weight:600; color:#F2F3F8; margin-bottom:11px;" data-ua="Звіт про порушення">Violations report</div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8;" data-ua="Кожен дискримінаційний пункт із юридичним обґрунтуванням.">Every discriminatory clause, flagged with legal grounds.</div>
+      </div>
+      <div style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px;">
+        <div style="width:46px; height:46px; border-radius:8px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.26); display:flex; align-items:center; justify-content:center; margin-bottom:22px;"><i class="fa-solid fa-list-check" style="color:#E0A33E; font-size:18px;"></i></div>
+        <div style="font-size:18px; font-weight:600; color:#F2F3F8; margin-bottom:11px;" data-ua="Перелік документів">Document checklist</div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8;" data-ua="Точний перелік документів, яких вимагає тендер.">Exactly which documents the tender requires.</div>
+      </div>
+      <div style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px;">
+        <div style="width:46px; height:46px; border-radius:8px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.26); display:flex; align-items:center; justify-content:center; margin-bottom:22px;"><i class="fa-solid fa-magnifying-glass-chart" style="color:#E0A33E; font-size:18px;"></i></div>
+        <div style="font-size:18px; font-weight:600; color:#F2F3F8; margin-bottom:11px;" data-ua="Аналіз пропозицій">Bid analysis</div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8;" data-ua="Пропозиції конкурентів — на ознаки змови.">Competitors&rsquo; bids checked for collusion signals.</div>
+      </div>
+      <div style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px;">
+        <div style="width:46px; height:46px; border-radius:8px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.26); display:flex; align-items:center; justify-content:center; margin-bottom:22px;"><i class="fa-solid fa-file-contract" style="color:#E0A33E; font-size:18px;"></i></div>
+        <div style="font-size:18px; font-weight:600; color:#F2F3F8; margin-bottom:11px;" data-ua="Аналіз договору">Contract analysis</div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8;" data-ua="Односторонні умови — до того, як ви підпишете.">One-sided terms surfaced before you sign.</div>
+      </div>
+      <div style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px;">
+        <div style="width:46px; height:46px; border-radius:8px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.26); display:flex; align-items:center; justify-content:center; margin-bottom:22px;"><i class="fa-solid fa-sitemap" style="color:#E0A33E; font-size:18px;"></i></div>
+        <div style="font-size:18px; font-weight:600; color:#F2F3F8; margin-bottom:11px;" data-ua="Дослідження постачальників">Supplier research</div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8;" data-ua="Власники, історія та ризики кожного постачальника.">Ownership, history and red flags on each supplier.</div>
+      </div>
+      <div style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px;">
+        <div style="width:46px; height:46px; border-radius:8px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.26); display:flex; align-items:center; justify-content:center; margin-bottom:22px;"><i class="fa-solid fa-gavel" style="color:#E0A33E; font-size:18px;"></i></div>
+        <div style="font-size:18px; font-weight:600; color:#F2F3F8; margin-bottom:11px;" data-ua="Пакет для оскарження">Appeal package</div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8;" data-ua="Готова скарга, складена для подання.">A complaint drafted and ready to file.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="agents" style="position:relative; padding:104px 48px; max-width:1280px; margin:0 auto; border-top:1px solid rgba(42,49,80,.5);">
+    <div data-reveal style="max-width:780px; margin-bottom:50px;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#E0A33E; margin-bottom:22px;" data-ua="Архітектура">Architecture</div>
+      <h2 style="font-family:'Spectral',serif; font-weight:300; font-size:46px; line-height:1.12; letter-spacing:-.01em; color:#F4F5FA; margin:0 0 14px;"><span style="color:#E0A33E; font-weight:400;">5</span> <span data-ua="спеціалізованих AI-агентів">specialized AI agents</span></h2>
+      <p style="font-size:16px; line-height:1.6; color:#8A8FA8; margin:0;" data-ua="Кожен агент робить одну річ добре, передаючи результат наступному в конвеєрі.">Each agent does one thing well, passing its result down the pipeline.</p>
+    </div>
+
+    <div data-reveal style="display:flex; align-items:stretch; gap:0; flex-wrap:wrap;">
+      <div style="flex:1; min-width:200px; background:#10152A; border:1px solid #242C4A; border-radius:6px; padding:24px 22px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;"><span style="width:7px; height:7px; border-radius:50%; background:#34D399; box-shadow:0 0 8px #34D399;"></span><span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; color:#34D399; text-transform:uppercase;">Production</span></div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:14px; color:#E8C98A; margin-bottom:12px; word-break:break-all;">oopz_researcher</div>
+        <div style="font-size:13px; line-height:1.5; color:#8A8FA8;" data-ua="Видобуває рішення ООПЗ для прецедентів.">Mines OOPZ appeal rulings for precedent.</div>
+      </div>
+      <div style="display:flex; align-items:center; padding:0 6px; color:#3A4267;"><i class="fa-solid fa-arrow-right-long"></i></div>
+      <div style="flex:1; min-width:200px; background:#10152A; border:1px solid #242C4A; border-radius:6px; padding:24px 22px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;"><span style="width:7px; height:7px; border-radius:50%; background:#34D399; box-shadow:0 0 8px #34D399;"></span><span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; color:#34D399; text-transform:uppercase;">Production</span></div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:14px; color:#E8C98A; margin-bottom:12px; word-break:break-all;">tender_doc_researcher</div>
+        <div style="font-size:13px; line-height:1.5; color:#8A8FA8;" data-ua="Розбирає тендерну документацію на дискримінаційні умови.">Parses tender docs for discriminatory terms.</div>
+      </div>
+      <div style="display:flex; align-items:center; padding:0 6px; color:#3A4267;"><i class="fa-solid fa-arrow-right-long"></i></div>
+      <div style="flex:1; min-width:200px; background:#10152A; border:1px solid #242C4A; border-radius:6px; padding:24px 22px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;"><span style="width:7px; height:7px; border-radius:50%; background:#34D399; box-shadow:0 0 8px #34D399;"></span><span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; color:#34D399; text-transform:uppercase;">Production</span></div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:14px; color:#E8C98A; margin-bottom:12px; word-break:break-all;">bid_researcher</div>
+        <div style="font-size:13px; line-height:1.5; color:#8A8FA8;" data-ua="Звіряє пропозиції конкурентів на ознаки змови.">Cross-checks competing bids for collusion.</div>
+      </div>
+      <div style="display:flex; align-items:center; padding:0 6px; color:#3A4267;"><i class="fa-solid fa-arrow-right-long"></i></div>
+      <div style="flex:1; min-width:200px; background:linear-gradient(180deg, rgba(224,163,62,.08), #10152A); border:1px solid rgba(224,163,62,.3); border-radius:6px; padding:24px 22px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;"><span style="width:7px; height:7px; border-radius:50%; background:#34D399; box-shadow:0 0 8px #34D399;"></span><span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; color:#34D399; text-transform:uppercase;">Production</span></div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:14px; color:#E0A33E; margin-bottom:12px; word-break:break-all;">investigation</div>
+        <div style="font-size:13px; line-height:1.5; color:#A9AEC4;" data-ua="Синтезує висновки в єдиний юридичний звіт.">Synthesizes findings into one legal report.</div>
+      </div>
+    </div>
+
+    <div data-reveal style="margin-top:18px; display:flex; align-items:center; gap:24px; background:#10152A; border:1px solid rgba(224,163,62,.22); border-radius:6px; padding:22px 26px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:14px; min-width:280px;">
+        <span style="width:7px; height:7px; border-radius:50%; background:#E0A33E; box-shadow:0 0 8px #E0A33E;"></span>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:14px; color:#E8C98A;">amku_researcher</span>
+        <span style="font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.1em; color:#E0A33E; text-transform:uppercase; border:1px solid rgba(224,163,62,.35); padding:3px 8px; border-radius:3px;">Beta &middot; 90%</span>
+      </div>
+      <div style="flex:1; min-width:200px; font-size:13px; line-height:1.5; color:#8A8FA8;" data-ua="Зіставляє рішення АМКУ з вашою справою — останній агент на підході.">Maps AMCU antitrust decisions to your case &mdash; the final agent landing soon.</div>
+      <div style="width:160px; height:5px; border-radius:3px; background:#242C4A; overflow:hidden;"><div style="width:90%; height:100%; background:#E0A33E;"></div></div>
+    </div>
+  </section>
+
+  <section id="market" style="position:relative; background:#0F1424; border-top:1px solid rgba(42,49,80,.5); border-bottom:1px solid rgba(42,49,80,.5);">
+    <div style="max-width:1280px; margin:0 auto; padding:100px 48px;">
+      <div data-reveal style="max-width:780px; margin-bottom:54px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#E0A33E; margin-bottom:22px;" data-ua="Ринок">Market</div>
+        <h2 style="font-family:'Spectral',serif; font-weight:300; font-size:46px; line-height:1.1; letter-spacing:-.01em; color:#F4F5FA; margin:0;" data-ua="Масштаб ринку.">The scale of the market.</h2>
+      </div>
+      <div data-reveal style="display:grid; grid-template-columns:repeat(4, 1fr); gap:1px; background:rgba(42,49,80,.5); border:1px solid rgba(42,49,80,.5); border-radius:6px; overflow:hidden;">
+        <div style="background:#0F1424; padding:38px 30px;">
+          <div style="font-family:'Spectral',serif; font-weight:300; font-size:50px; line-height:1; color:#E0A33E; margin-bottom:14px;" data-ua="800 млрд ₴+">&#8372;800B+</div>
+          <div style="font-size:14px; line-height:1.45; color:#9CA1B8;" data-ua="Щорічний обсяг ProZorro">Annual ProZorro volume</div>
+        </div>
+        <div style="background:#0F1424; padding:38px 30px;">
+          <div style="font-family:'Spectral',serif; font-weight:300; font-size:50px; line-height:1; color:#F4F5FA; margin-bottom:14px;" data-ua="200 000+">200K+</div>
+          <div style="font-size:14px; line-height:1.45; color:#9CA1B8;" data-ua="Активних учасників">Active participants</div>
+        </div>
+        <div style="background:#0F1424; padding:38px 30px;">
+          <div style="font-family:'Spectral',serif; font-weight:300; font-size:50px; line-height:1; color:#F4F5FA; margin-bottom:14px;" data-ua="30 000+">30K+</div>
+          <div style="font-size:14px; line-height:1.45; color:#9CA1B8;" data-ua="Замовників">Public buyers</div>
+        </div>
+        <div style="background:#0F1424; padding:38px 30px;">
+          <div style="font-family:'Spectral',serif; font-weight:300; font-size:50px; line-height:1; color:#E0A33E; margin-bottom:14px;" data-ua="&euro;2 трлн">&euro;2T</div>
+          <div style="font-size:14px; line-height:1.45; color:#9CA1B8;" data-ua="Ринок закупівель ЄС">EU procurement market</div>
+        </div>
+      </div>
+      <p data-reveal style="margin:34px 0 0; font-family:'Spectral',serif; font-style:italic; font-weight:300; font-size:20px; color:#A9AEC4;" data-ua="Система масштабується на будь-яку юрисдикцію.">The same system scales to any jurisdiction.</p>
+    </div>
+  </section>
+
+  <section id="knowledge" style="position:relative; padding:104px 48px; max-width:1280px; margin:0 auto;">
+    <div data-reveal style="display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:52px; flex-wrap:wrap;">
+      <div style="max-width:680px;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#E0A33E; margin-bottom:22px;" data-ua="База знань">Knowledge base</div>
+        <h2 style="font-family:'Spectral',serif; font-weight:300; font-size:46px; line-height:1.1; letter-spacing:-.01em; color:#F4F5FA; margin:0;" data-ua="На чому навчена система.">What the system is trained on.</h2>
+      </div>
+      <div style="display:inline-flex; align-items:center; gap:10px; font-family:'JetBrains Mono',monospace; font-size:12px; color:#34D399; background:rgba(52,211,153,.08); border:1px solid rgba(52,211,153,.24); padding:9px 14px; border-radius:4px;"><i class="fa-solid fa-rotate" style="font-size:12px;"></i><span data-ua="Автооновлення щодня">Auto-updated every day</span></div>
+    </div>
+    <div data-reveal style="display:grid; grid-template-columns:repeat(3, 1fr); gap:18px;">
+      <div style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:36px 32px;">
+        <i class="fa-solid fa-scale-balanced" style="color:#6E7493; font-size:18px;"></i>
+        <div style="font-family:'Spectral',serif; font-weight:300; font-size:48px; line-height:1; color:#F4F5FA; margin:22px 0 12px;" data-ua="286 634">286,634</div>
+        <div style="font-size:15px; line-height:1.45; color:#9CA1B8;" data-ua="Нормативних документів — законодавство">Legal &amp; regulatory documents</div>
+      </div>
+      <div style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:36px 32px;">
+        <i class="fa-solid fa-landmark" style="color:#6E7493; font-size:18px;"></i>
+        <div style="font-family:'Spectral',serif; font-weight:300; font-size:48px; line-height:1; color:#F4F5FA; margin:22px 0 12px;" data-ua="4 402">4,402</div>
+        <div style="font-size:15px; line-height:1.45; color:#9CA1B8;" data-ua="Рішень ООПЗ">OOPZ appeal rulings</div>
+      </div>
+      <div style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:36px 32px;">
+        <i class="fa-solid fa-gavel" style="color:#6E7493; font-size:18px;"></i>
+        <div style="font-family:'Spectral',serif; font-weight:300; font-size:48px; line-height:1; color:#F4F5FA; margin:22px 0 12px;" data-ua="87">87</div>
+        <div style="font-size:15px; line-height:1.45; color:#9CA1B8;" data-ua="Рішень АМКУ">AMCU antitrust decisions</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="roadmap" style="position:relative; background:#0F1424; border-top:1px solid rgba(42,49,80,.5); border-bottom:1px solid rgba(42,49,80,.5);">
+    <div style="max-width:1280px; margin:0 auto; padding:100px 48px; display:grid; grid-template-columns:.8fr 1.2fr; gap:60px; align-items:start;">
+      <div data-reveal>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#E0A33E; margin-bottom:22px;" data-ua="Дорожня карта">Roadmap</div>
+        <h2 style="font-family:'Spectral',serif; font-weight:300; font-size:46px; line-height:1.1; letter-spacing:-.01em; color:#F4F5FA; margin:0 0 18px;" data-ua="Куди ми рухаємось.">Where we&rsquo;re headed.</h2>
+        <p style="font-size:16px; line-height:1.6; color:#8A8FA8; margin:0;" data-ua="Чотири агенти вже в продакшені. Далі — інтерфейс, інтеграції та нові юрисдикції.">Four agents already in production. Next: the interface, integrations and new jurisdictions.</p>
+      </div>
+
+      <div data-reveal style="background:#10152A; border:1px solid #242C4A; border-radius:8px; overflow:hidden;">
+        <div style="display:flex; align-items:center; gap:16px; padding:18px 26px; border-bottom:1px solid #1C2440;">
+          <span style="width:22px; height:22px; border-radius:50%; background:rgba(52,211,153,.14); border:1px solid rgba(52,211,153,.4); display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-check" style="color:#34D399; font-size:11px;"></i></span>
+          <span style="flex:1; font-family:'JetBrains Mono',monospace; font-size:14px; color:#DDE0EC;">TenderDoc Researcher v3.2</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.08em; color:#34D399; text-transform:uppercase;" data-ua="Готово">Shipped</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px; padding:18px 26px; border-bottom:1px solid #1C2440;">
+          <span style="width:22px; height:22px; border-radius:50%; background:rgba(52,211,153,.14); border:1px solid rgba(52,211,153,.4); display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-check" style="color:#34D399; font-size:11px;"></i></span>
+          <span style="flex:1; font-family:'JetBrains Mono',monospace; font-size:14px; color:#DDE0EC;">Bid Researcher v3.3</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.08em; color:#34D399; text-transform:uppercase;" data-ua="Готово">Shipped</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px; padding:18px 26px; border-bottom:1px solid #1C2440;">
+          <span style="width:22px; height:22px; border-radius:50%; background:rgba(52,211,153,.14); border:1px solid rgba(52,211,153,.4); display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-check" style="color:#34D399; font-size:11px;"></i></span>
+          <span style="flex:1; font-family:'JetBrains Mono',monospace; font-size:14px; color:#DDE0EC;">OOPZ Researcher v2.0</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.08em; color:#34D399; text-transform:uppercase;" data-ua="Готово">Shipped</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px; padding:18px 26px; border-bottom:1px solid #1C2440; background:rgba(224,163,62,.04);">
+          <span style="width:22px; height:22px; border-radius:50%; background:rgba(224,163,62,.16); border:1px solid rgba(224,163,62,.45); display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-rotate" style="color:#E0A33E; font-size:11px;"></i></span>
+          <span style="flex:1; font-family:'JetBrains Mono',monospace; font-size:14px; color:#DDE0EC;">AMKU Researcher</span>
+          <span style="display:flex; align-items:center; gap:10px;"><span style="width:60px; height:4px; border-radius:3px; background:#242C4A; overflow:hidden;"><span style="display:block; width:90%; height:100%; background:#E0A33E;"></span></span><span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#E0A33E;">90%</span></span>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px; padding:18px 26px; border-bottom:1px solid #1C2440;">
+          <span style="width:22px; height:22px; border-radius:50%; border:1px solid #313A5E;"></span>
+          <span style="flex:1; font-family:'JetBrains Mono',monospace; font-size:14px; color:#7A8099;" data-ua="Фронтенд / кабінет користувача">Frontend / user cabinet</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.08em; color:#5A6080; text-transform:uppercase;" data-ua="Заплановано">Planned</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px; padding:18px 26px; border-bottom:1px solid #1C2440;">
+          <span style="width:22px; height:22px; border-radius:50%; border:1px solid #313A5E;"></span>
+          <span style="flex:1; font-family:'JetBrains Mono',monospace; font-size:14px; color:#7A8099;" data-ua="Інтеграція YouControl API">YouControl API integration</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.08em; color:#5A6080; text-transform:uppercase;" data-ua="Заплановано">Planned</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px; padding:18px 26px;">
+          <span style="width:22px; height:22px; border-radius:50%; border:1px solid #313A5E;"></span>
+          <span style="flex:1; font-family:'JetBrains Mono',monospace; font-size:14px; color:#7A8099;" data-ua="Розгляд можливості інтеграції на європейські юрисдикції">Exploring expansion to European jurisdictions</span>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.08em; color:#5A6080; text-transform:uppercase;" data-ua="Заплановано">Planned</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="founder" style="position:relative; padding:104px 48px; max-width:1280px; margin:0 auto;">
+    <div data-reveal style="max-width:860px;">
+      <p style="font-family:'Spectral',serif; font-style:italic; font-weight:300; font-size:26px; line-height:1.5; color:#C7CBDB; margin:0; border-left:2px solid rgba(224,163,62,.5); padding-left:28px;" data-ua="Побудовано повністю за допомогою Claude та Claude Code. Нуль попереднього досвіду програмування → production-ready платформа за 6 місяців.">Built entirely with Claude and Claude Code. Zero prior programming experience &rarr; a production-ready platform in 6 months.</p>
+    </div>
+  </section>
+
+  <footer style="position:relative; background:#0C111F; border-top:1px solid rgba(42,49,80,.6);">
+    <div style="max-width:1280px; margin:0 auto; padding:64px 48px 40px;">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:40px; flex-wrap:wrap; padding-bottom:44px; border-bottom:1px solid rgba(42,49,80,.5);">
+        <div style="max-width:360px;">
+          <div style="display:flex; align-items:center; gap:13px; margin-bottom:18px;">
+            <span style="display:inline-flex; width:32px; height:32px; align-items:center; justify-content:center;"><svg width="32" height="32" viewBox="0 0 64 64" fill="none" style="overflow:visible; filter:drop-shadow(0 0 7px rgba(224,163,62,.35));"><defs><radialGradient id="gxc-f" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#FFFDF7"/><stop offset=".35" stop-color="#FBE3A8"/><stop offset=".7" stop-color="#E0A33E" stop-opacity=".55"/><stop offset="1" stop-color="#E0A33E" stop-opacity="0"/></radialGradient><linearGradient id="gxa-f" x1="8" y1="20" x2="56" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#F6D38C"/><stop offset=".55" stop-color="#E0A33E"/><stop offset="1" stop-color="#8E7BE6" stop-opacity=".7"/></linearGradient></defs><g class="gx-tilt"><g class="gx-spin"><ellipse cx="32" cy="32" rx="27" ry="12" stroke="#7A6CCB" stroke-width=".7" stroke-opacity=".35" fill="none"/><path d="M30 25 C44 23 55 28 55 33 C55 37.5 49 41 42.5 40.5" stroke="url(#gxa-f)" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M34 39 C20 41 9 36 9 31 C9 26.5 15 23 21.5 23.5" stroke="url(#gxa-f)" stroke-width="1.8" stroke-linecap="round" fill="none"/></g></g><g class="gx-core"><circle cx="32" cy="32" r="13" fill="url(#gxc-f)"/><circle cx="32" cy="32" r="2.4" fill="#FFFDF7"/></g><circle class="gx-star" cx="13" cy="13" r="1.1" fill="#EAF1FF"/><circle class="gx-star" cx="53" cy="15" r="1.3" fill="#FBE3A8"/><circle class="gx-star" cx="55" cy="50" r="1" fill="#EAF1FF"/><circle class="gx-star" cx="11" cy="48" r="1.1" fill="#C9BCFF"/><circle class="gx-star" cx="44" cy="9" r=".8" fill="#FFFDF7"/></svg></span>
+            <span style="font-family:'Spectral',serif; font-weight:500; font-size:19px; letter-spacing:.30em; color:#F4F2EC;">MAGILARITY</span>
+          </div>
+          <p style="font-family:'Spectral',serif; font-style:italic; font-size:15px; line-height:1.5; color:#7A8099; margin:0;" data-ua="Магічна прозорість там, де її навмисно приховують.">Magical clarity, where it is deliberately hidden.</p>
+        </div>
+        <div style="display:flex; gap:64px; flex-wrap:wrap;">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:#5A6080; margin-bottom:16px;" data-ua="Контакт">Contact</div>
+            <a href="/cdn-cgi/l/email-protection#90f9fef6ffd0fdf1f7f9fcf1e2f9e4e9bef3fffd" style="display:block; font-size:15px; color:#C7CBDB; text-decoration:none; margin-bottom:12px;"><span class="__cf_email__" data-cfemail="432a2d252c032e22242a2f22312a373a6d202c2e">[email&#160;protected]</span></a>
+            <a href="https://github.com/" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:9px; font-size:15px; color:#C7CBDB; text-decoration:none;"><i class="fa-brands fa-github"></i> GitHub</a>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:20px; padding-top:24px; flex-wrap:wrap;">
+        <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#5A6080;">&copy; 2025&ndash;2026 Magilarity</div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#5A6080;" data-ua="Побудовано в Україні">Built in Ukraine</div>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+(function(){
+  var KEY='magi-lang';
+  function setLang(lang){
+    var nodes=document.querySelectorAll('[data-ua]');
+    for(var i=0;i<nodes.length;i++){
+      var el=nodes[i];
+      if(el.getAttribute('data-en')===null){ el.setAttribute('data-en', el.textContent); }
+      el.textContent = (lang==='ua') ? el.getAttribute('data-ua') : el.getAttribute('data-en');
+    }
+    var btns=document.querySelectorAll('[data-lang-btn]');
+    for(var j=0;j<btns.length;j++){
+      var on = btns[j].getAttribute('data-lang-btn')===lang;
+      btns[j].style.color = on ? '#F2F3F8' : '#6E7493';
+      btns[j].style.fontWeight = on ? '600' : '500';
+    }
+    document.documentElement.lang = (lang==='ua') ? 'uk' : 'en';
+    try{ localStorage.setItem(KEY, lang); }catch(e){}
+  }
+  var btns=document.querySelectorAll('[data-lang-btn]');
+  for(var k=0;k<btns.length;k++){
+    btns[k].style.cursor='pointer';
+    (function(b){ b.addEventListener('click', function(){ setLang(b.getAttribute('data-lang-btn')); }); })(btns[k]);
+  }
+  var init='en'; try{ init=localStorage.getItem(KEY)||'en'; }catch(e){}
+  setLang(init);
+
+  var items=document.querySelectorAll('[data-reveal]');
+  var revealed=0;
+  function show(el){ if(el && !el.classList.contains('in')){ el.classList.add('in'); revealed++; } }
+  function showAll(){ for(var i=0;i<items.length;i++){ items[i].style.transition='none'; show(items[i]); } }
+  if('IntersectionObserver' in window){
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ show(e.target); io.unobserve(e.target); } });
+    }, {threshold:0.12, rootMargin:'0px 0px -7% 0px'});
+    for(var i=0;i<items.length;i++){ io.observe(items[i]); }
+    // Safety: if the observer never fired (unsupported / throttled context), reveal everything.
+    setTimeout(function(){ if(revealed===0){ showAll(); } }, 1500);
+  } else {
+    showAll();
+  }
+})();
+</script>
+</body>
+</html>
