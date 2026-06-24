@@ -359,6 +359,70 @@
     </div>
   </section>
 
+  <section id="docs" style="position:relative; padding:104px 48px; max-width:1280px; margin:0 auto; border-top:1px solid rgba(42,49,80,.5);">
+    <div data-reveal style="max-width:780px; margin-bottom:52px;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:.22em; text-transform:uppercase; color:#E0A33E; margin-bottom:22px;" data-ua="Документація">Documentation</div>
+      <h2 style="font-family:'Spectral',serif; font-weight:300; font-size:46px; line-height:1.12; letter-spacing:-.01em; color:#F4F5FA; margin:0 0 14px;" data-ua="Детальні технічні специфікації.">Detailed technical specs.</h2>
+      <p style="font-size:16px; line-height:1.6; color:#8A8FA8; margin:0;" data-ua="Архітектура кожного агента, методологія аналізу, інфраструктура та дорожня карта — у відкритому доступі.">Architecture of each agent, analysis methodology, infrastructure and roadmap &mdash; open access.</p>
+    </div>
+
+    <div data-reveal style="display:grid; grid-template-columns:repeat(3, 1fr); gap:18px;">
+      <a href="https://github.com/MagilarityAI/magilarity.com/blob/main/docs/agents/tender_doc_researcher.md" target="_blank" rel="noopener" style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px; text-decoration:none; display:flex; flex-direction:column; gap:14px;" onmouseover="this.style.borderColor='rgba(224,163,62,.45)'" onmouseout="this.style.borderColor='#283155'">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:38px; height:38px; border-radius:6px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.22); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="fa-solid fa-magnifying-glass-chart" style="color:#E0A33E; font-size:15px;"></i></div>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#E8C98A; word-break:break-all;">tender_doc_researcher</span>
+        </div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8; flex:1;" data-ua="11-кроковий конвеєр, 16 критеріїв аналізу, 13 категорій закупівель. Пайплайн обробки документів та архітектура LLM.">11-step pipeline, 16 analysis criteria, 13 procurement categories. Document processing and LLM architecture.</div>
+        <div style="display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:12px; color:#5A7CCC;"><i class="fa-brands fa-github"></i><span data-ua="Переглянути →">View docs →</span></div>
+      </a>
+
+      <a href="https://github.com/MagilarityAI/magilarity.com/blob/main/docs/agents/bid_researcher.md" target="_blank" rel="noopener" style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px; text-decoration:none; display:flex; flex-direction:column; gap:14px;" onmouseover="this.style.borderColor='rgba(224,163,62,.45)'" onmouseout="this.style.borderColor='#283155'">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:38px; height:38px; border-radius:6px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.22); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="fa-solid fa-people-arrows" style="color:#E0A33E; font-size:15px;"></i></div>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#E8C98A;">bid_researcher</span>
+        </div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8; flex:1;" data-ua="Каскадне сито перевірки документів, ансамблева LLM для тех. специфікацій, механізм SAFEGUARD, 15+ розділів звіту.">Cascade sieve for document verification, ensemble LLM for tech specs, SAFEGUARD mechanism, 15+ chapter DOCX report.</div>
+        <div style="display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:12px; color:#5A7CCC;"><i class="fa-brands fa-github"></i><span data-ua="Переглянути →">View docs →</span></div>
+      </a>
+
+      <a href="https://github.com/MagilarityAI/magilarity.com/blob/main/docs/agents/oopz_researcher.md" target="_blank" rel="noopener" style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px; text-decoration:none; display:flex; flex-direction:column; gap:14px;" onmouseover="this.style.borderColor='rgba(224,163,62,.45)'" onmouseout="this.style.borderColor='#283155'">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:38px; height:38px; border-radius:6px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.22); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="fa-solid fa-scale-balanced" style="color:#E0A33E; font-size:15px;"></i></div>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#E8C98A;">oopz_researcher</span>
+        </div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8; flex:1;" data-ua="10-крокова обробка рішень ООПЗ, двофакторний захист від галюцинацій, система самонавчання, оцінка якості A+→D.">10-step OOPZ ruling pipeline, two-factor anti-hallucination, self-improving system, quality scoring A+&rarr;D.</div>
+        <div style="display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:12px; color:#5A7CCC;"><i class="fa-brands fa-github"></i><span data-ua="Переглянути →">View docs →</span></div>
+      </a>
+
+      <a href="https://github.com/MagilarityAI/magilarity.com/blob/main/docs/infrastructure.md" target="_blank" rel="noopener" style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px; text-decoration:none; display:flex; flex-direction:column; gap:14px;" onmouseover="this.style.borderColor='rgba(224,163,62,.45)'" onmouseout="this.style.borderColor='#283155'">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:38px; height:38px; border-radius:6px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.22); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="fa-solid fa-server" style="color:#E0A33E; font-size:15px;"></i></div>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#E8C98A;">infrastructure</span>
+        </div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8; flex:1;" data-ua="3 бази даних, pipeline обробки документів, гібридна маршрутизація LLM, безпека та масштабування на Google Cloud.">3 databases, document processing pipeline, hybrid LLM routing, security architecture, Google Cloud scaling.</div>
+        <div style="display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:12px; color:#5A7CCC;"><i class="fa-brands fa-github"></i><span data-ua="Переглянути →">View docs →</span></div>
+      </a>
+
+      <a href="https://github.com/MagilarityAI/magilarity.com/blob/main/docs/roadmap.md" target="_blank" rel="noopener" style="background:#181E34; border:1px solid #283155; border-radius:6px; padding:30px 28px; text-decoration:none; display:flex; flex-direction:column; gap:14px;" onmouseover="this.style.borderColor='rgba(224,163,62,.45)'" onmouseout="this.style.borderColor='#283155'">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:38px; height:38px; border-radius:6px; background:rgba(224,163,62,.1); border:1px solid rgba(224,163,62,.22); display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="fa-solid fa-map" style="color:#E0A33E; font-size:15px;"></i></div>
+          <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#E8C98A;">roadmap</span>
+        </div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8; flex:1;" data-ua="4 фази розвитку — від агентів у продакшені до виходу на ринки ЄС. Деталі кожного наступного кроку.">4 development phases &mdash; from production agents to EU market entry. Details on every next step.</div>
+        <div style="display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:12px; color:#5A7CCC;"><i class="fa-brands fa-github"></i><span data-ua="Переглянути →">View docs →</span></div>
+      </a>
+
+      <a href="https://github.com/MagilarityAI/magilarity.com" target="_blank" rel="noopener" style="background:linear-gradient(135deg, rgba(224,163,62,.07), rgba(30,37,64,.4)); border:1px solid rgba(224,163,62,.22); border-radius:6px; padding:30px 28px; text-decoration:none; display:flex; flex-direction:column; justify-content:space-between; gap:18px;" onmouseover="this.style.borderColor='rgba(224,163,62,.5)'" onmouseout="this.style.borderColor='rgba(224,163,62,.22)'">
+        <div style="display:flex; align-items:center; gap:14px;">
+          <i class="fa-brands fa-github" style="color:#E0A33E; font-size:28px;"></i>
+          <span style="font-family:'Spectral',serif; font-weight:400; font-size:20px; color:#F4F2EC;" data-ua="Репозиторій">Repository</span>
+        </div>
+        <div style="font-size:14px; line-height:1.55; color:#8A8FA8;" data-ua="Уся документація проекту у відкритому доступі на GitHub.">All project documentation is publicly available on GitHub.</div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#E0A33E;">MagilarityAI/magilarity.com &rarr;</div>
+      </a>
+    </div>
+  </section>
+
   <section id="founder" style="position:relative; padding:104px 48px; max-width:1280px; margin:0 auto;">
     <div data-reveal style="max-width:860px;">
       <p style="font-family:'Spectral',serif; font-style:italic; font-weight:300; font-size:26px; line-height:1.5; color:#C7CBDB; margin:0; border-left:2px solid rgba(224,163,62,.5); padding-left:28px;" data-ua="Побудовано повністю за допомогою Claude та Claude Code. Нуль попереднього досвіду програмування → production-ready платформа за 6 місяців.">Built entirely with Claude and Claude Code. Zero prior programming experience &rarr; a production-ready platform in 6 months.</p>
