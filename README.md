@@ -1,102 +1,139 @@
-# MAGILARITY
+# 🪄 MAGILARITY
+## Magical Transparency in Public Procurement through Artificial Intelligence
 
-**AI-powered multi-agent system for automated legal investigation of Ukrainian public procurement. Analyzes Prozorro tenders, regulatory decisions, legislative compliance and participant documents using specialized AI agents and LLM orchestration.**
+> *Magilarity = Magic + Clarity — bringing magical transparency where it is deliberately hidden*
 
----
-
-## The Problem
-
-Ukraine's public procurement system (Prozorro) processes hundreds of thousands of tenders annually. Detecting violations — bid rigging, specification tailoring, collusion, unlawful requirements — requires deep legal expertise, analysis of hundreds of pages of documents, and cross-referencing with regulatory decisions and legislation.
-
-This work currently takes experienced lawyers 8–16 hours per tender. MAGILARITY automates it.
+**MAGILARITY** is a production-grade multi-agent AI platform for automated legal analysis of Ukraine's public procurement system. The system analyzes ProZorro tenders, regulatory decisions, legislative compliance, and participant documents using specialized AI agents and large language model orchestration.
 
 ---
 
-## What MAGILARITY Does
+## 🎯 The Problem We Solve
 
-The system takes a Prozorro tender ID as input and produces:
+Ukraine's public procurement system (ProZorro) processes hundreds of thousands of tenders annually totaling over **800 billion hryvnias**. Detecting violations — bid rigging, discriminatory tender requirements, specification tailoring for a specific supplier, anti-competitive concerted actions — requires deep legal expertise, analysis of hundreds of pages of documents, and cross-referencing regulatory decisions with legislation.
 
-- A **legal compliance report** identifying violations of procurement law (Law No. 922-VIII, CMU Resolution No. 1178)
-- A **document checklist** for tender participants — every document required, with exact quotes from the tender documentation
-- A **bid analysis** — AI review of each participant's submitted documents against the checklist
-- A **contract risk analysis** — identifying one-sided conditions, hidden obligations, violations of Civil Code
-- An **appeal package** — structured grounds for filing a complaint to the Procurement Appeals Body (ООПЗ)
+**This work currently takes an experienced lawyer 8–16 hours per tender.**
+
+### Systemic market problems:
+
+- 🔴 **Hidden discriminatory requirements** — buyers deliberately conceal conditions that restrict competition across various sections of tender documentation
+- 🔴 **Specification tailoring** — technical characteristics are written to match only one specific supplier
+- 🔴 **Anti-competitive collusion** — participants coordinate prices and bid submission strategies
+- 🔴 **One-sided contracts** — draft contracts contain conditions that protect exclusively the buyer's interests
+- 🔴 **Inaccessibility of legal help** — small and medium businesses cannot afford a specialized lawyer for every tender
+
+**MAGILARITY automates this entire process.**
 
 ---
 
-## Architecture — 5 Specialized Agents
+## 💡 What MAGILARITY Does
+
+The system takes a ProZorro tender number and generates a complete legal analysis:
+
+| Output | Description |
+|--------|-------------|
+| 📋 **Violation Report** | Legal qualification of violations of Law No. 922-VIII and CMU Resolution No. 1178 with statutory references |
+| 📄 **Document Checklist** | Complete checklist of documents for the participant with exact quotes from the tender documentation |
+| 🔍 **Bid Analysis** | AI review of each participant's submitted documents against requirements |
+| ⚖️ **Contract Analysis** | Detection of one-sided conditions, hidden obligations, Civil Code of Ukraine violations |
+| 🏢 **Supplier Research** | Equipment brand/model identification from specs, search for distributors in Ukraine |
+| 📝 **Appeal Package** | Structured grounds for filing a complaint to the Procurement Appeals Body (PPOU) with precedent references |
+
+---
+
+## 🤖 Architecture — 5 Specialized Agents
 
 ```
-oopz_researcher ──────────────────────────────────────────────────────────────────────┐
-    ↓ (regulatory decisions database)                                                  │
-tender_doc_researcher ─────────────────────────────────────────────────────────────────┤
-    ↓ (document checklist via agent_handoffs)                                          │
-bid_researcher                                                                         │
-    ↓ (bid compliance report)                                                          │
-investigation (orchestrator) ──────────────────────────── reads all agent outputs ────┘
+oopz_researcher ──────────────────────────────────────────────┐
+    ↓ (appeals body decisions database)                        │
+tender_doc_researcher ─────────────────────────────────────────┤
+    ↓ (document checklist via agent_handoffs)                  │
+bid_researcher                                                  │
+    ↓ (bid compliance report)                                  │
+investigation (orchestrator) ──── reads all results ───────────┘
 ```
 
 | Agent | Status | Purpose |
 |-------|--------|---------|
-| `tender_doc_researcher` | Production v3.2 | Full tender document analysis — 16 legal criteria + contract review + 13 procurement categories |
-| `bid_researcher` | Production v3.3 | Participant bid analysis — document compliance, technical spec comparison, digital signature verification |
-| `oopz_researcher` | Production v2.0 | Analysis of procurement appeals body decisions — builds regulatory precedent database |
-| `amku_researcher` | Beta | Anti-Monopoly Committee decision research |
-| `investigation` | Active development | Main orchestrator — coordinates all agents for full investigation |
+| `tender_doc_researcher` | ✅ Production v3.2 | Full tender documentation analysis — 16 legal criteria + contract review + 13 procurement categories |
+| `bid_researcher` | ✅ Production v3.3 | Participant bid analysis — document compliance, technical spec comparison, digital signature verification |
+| `oopz_researcher` | ✅ Production v2.0 | PPOU decision analysis — building regulatory precedent database |
+| `amku_researcher` | 🔄 Beta | Anti-Monopoly Committee decision research |
+| `investigation` | 🔄 In development | Main orchestrator — coordinates all agents for full investigation |
 
 ---
 
-## tender_doc_researcher — How It Works
+## 🔬 TenderDoc Researcher — How It Works
 
-Analyzes tender documentation across **13 procurement categories** (construction, food, pharmaceuticals, IT services, fuel, medical equipment, etc.).
+Analyzes tender documentation across **13 procurement categories** (construction, food products, pharmaceuticals, IT services, fuel, medical equipment, etc.).
 
-**11-step pipeline:**
-1. Classification — identifies CPV code and procurement category
-2. Registry check — deduplication
-3. Download — full Prozorro JSON + all tender documents
-4. Text extraction — python-docx (primary), pdfplumber, openpyxl
-5. ООПЗ precedent retrieval — relevant regulatory decisions from database
-6. Customer profiling — procurement history analysis
-7. Q&A analysis — processes buyer clarifications and tender amendments
+### 11-step pipeline:
+
+1. **Classification** — CPV code and procurement category determination
+2. **Registry check** — deduplication
+3. **Download** — full ProZorro JSON + all tender documents
+4. **Text extraction** — python-docx (primary), pdfplumber, openpyxl
+5. **PPOU precedent retrieval** — relevant decisions from the database
+6. **Customer profiling** — procurement history analysis
+7. **Q&A analysis** — processing buyer clarifications and tender amendments
 8. **Core analysis (2 LLM calls)** — 16-point legal analysis + document checklist
-9. Contract analysis — project contract legal review
-10. Report generation — 6 output files
-11. Registry update + handoff to bid_researcher
+9. **Contract analysis** — project contract legal review
+10. **Report generation** — 6 output files
+11. **Registry update** + handoff to bid_researcher
 
-**16 analysis criteria include:**
-- Legislative violations (Law No. 922-VIII, CMU No. 1178)
+### 16 analysis criteria include:
+
+- Legislative violations (Law No. 922-VIII, CMU Resolution No. 1178)
 - Competition restrictions and discriminatory requirements
 - Specification tailoring indicators (designed for a specific supplier)
 - Excessive qualification requirements
 - Evaluation criteria fairness (price weight ≥70%)
-- Localization requirements (CMU No. 782)
+- Localization requirements (CMU Resolution No. 782)
 - Appeal grounds with deadlines (3 days before submission deadline under martial law)
 
-**Output:** `analysis_report.docx`, `documents_checklist.docx`, `contract_analysis.docx`, `winner_checklist.docx`, `chronological_checklist.docx`, `analysis.json`
+### 🌟 Unique Equipment Investigator Module
+
+For specific equipment, the agent automatically:
+- Extracts technical specifications from tender documentation
+- Identifies the brand and model via web search
+- Finds official distributors in Ukraine
+- Detects specification tailoring indicators for a specific manufacturer
+- Generates a ready-to-submit complaint text for the PPOU
+
+### Donor Program Support
+
+A dedicated module for procurements funded by international donors:
+- 🇺🇦 Ukraine Facility (EU)
+- 🏦 EBRD, World Bank, EIB
+- 🇺🇸 USAID
+- 🇺🇳 UN agencies, KfW
+
+**Output files:** `analysis_report.docx`, `documents_checklist.docx`, `contract_analysis.docx`, `winner_checklist.docx`, `chronological_checklist.docx`, `analysis.json`
 
 ---
 
-## bid_researcher — How It Works
+## 📋 Bid Researcher — How It Works
 
-Receives the document checklist from `tender_doc_researcher` and analyzes each participant's submitted bid.
+Receives the document checklist from tender_doc_researcher and analyzes each participant's submitted bid.
 
-**Cascade pipeline (sieve architecture):**
+### Cascade pipeline (sieve architecture):
+
 ```
-Stage 1: File indexing      → 1 Gemini call per file → doc_index.json
+Stage 1: File indexing      → 1 LLM call per file → doc_index.json
 Sieve 1: Simple documents   → 1 text call → confirmed / pending
 Sieve 2: Tabular documents  → batches of 8 PDFs → confirmed / pending
 Sieve 3: Complex scans      → batches of 8 PDFs → confirmed / unresolved
-Arbitrator                  → sequential per unresolved doc → final verdict
+Arbitrator                  → sequential per unresolved → final verdict
 Final report                → JSON + DOCX
 ```
 
-**Key capabilities:**
-- Detects information within composite documents (legal basis: Art. 16 Law No. 922-VIII)
-- Technical specification comparison via GPT-5.1 vision (PDF scans → images)
-- Document content verification for bank guarantees, qualification criteria, forms
-- Digital signature scanning (`.p7s` files) with inheritance for archive contents
-- Incremental analysis — proposal → 24h correction → winner documents
-- Archive extraction with bank guarantee package detection
+### Key capabilities:
+
+- Detection of information within composite documents (legal basis: Art. 16 of Law No. 922-VIII)
+- Technical specification comparison via vision LLM (PDF scans → images)
+- Document content verification: bank guarantees, qualification criteria, forms
+- Digital signature scanning (.p7s files) with inheritance for archive contents
+- Incremental analysis: proposal → 24h correction → winner documents
+- **SAFEGUARD mechanism** — protection against LLM errors in bank guarantee analysis
 
 **Verdict scale:** `compliant` → `requires_correction` → `non_compliant` → `requires_user_review`
 
@@ -104,94 +141,108 @@ Final report                → JSON + DOCX
 
 ---
 
-## oopz_researcher — How It Works
+## ⚖️ OOPZ Researcher — How It Works
 
-Processes decisions of Ukraine's Procurement Appeals Body (ООПЗ) and builds a searchable regulatory database used by other agents.
+Processes decisions of the Procurement Appeals Body (PPOU) and builds a regulatory precedent database used by other agents.
 
-**10-step analysis per decision:**
-- GPT analysis with strict anti-hallucination rules (all claims must cite decision text)
-- Legal validation — all statutory references verified against legislation database
-- Hybrid quality scoring (70% LLM + 30% independent validator)
-- Grade system: A+ (9-10), A (8-8.9), B+ (7-7.9) ...
+### 10-step analysis per decision:
 
-**Output:** DOCX detailed report, JSON for agent consumption, Excel registry, PostgreSQL storage in `agent_memory`
+1. LLM analysis with strict anti-hallucination rules
+2. Legal validation — all statutory references verified against the legislation database
+3. Hybrid quality scoring (70% LLM + 30% independent validator)
+
+**Grade system:** A+ (9-10), A (8-8.9), B+ (7-7.9)...
+
+**Output:** detailed DOCX report, JSON for agent consumption, Excel registry, PostgreSQL storage
 
 ---
 
-## Technology Stack
+## 🗄️ Databases
+
+### Primary DB (appdb)
+**57 tables | 332,524+ records**
+
+| Table | Records | Description |
+|-------|---------|-------------|
+| legislation | 286,634 | Full text of Ukrainian legislation. Auto-updated daily via data.gov.ua API |
+| oopz_decisions | 4,402 | Procurement Appeals Body decisions |
+| amku_decisions | 87 | Anti-Monopoly Committee of Ukraine decisions |
+| court_decisions | — | Court decisions (table ready, population planned) |
+| prozorro_* | — | Real-time ProZorro procurement data |
+
+### Agent Memory DB (magilarity_agent_memory)
+**29 tables | 963 records**
+
+| Table | Records | Description |
+|-------|---------|-------------|
+| agents_registry | 8 | Registered AI agents |
+| investigation_cycles | 103 | Completed analysis cycles |
+| investigation_steps | 589 | Step-level execution logs |
+| learning_experiences | 19 | Agent learning records |
+| knowledge_base | 56 | Accumulated knowledge |
+
+---
+
+## 🏗️ Technology Stack
 
 | Layer | Technology |
 |-------|-----------|
-| **LLM** | Multi-provider: Google, OpenAI, Anthropic — routed by task type |
-| **Backend** | Python 3.11, multi-agent orchestration |
-| **Document processing** | python-docx, pdfplumber, PyMuPDF (PDF→PNG), openpyxl, Tesseract OCR |
-| **Databases** | PostgreSQL — legislation DB (54 tables, ~3.6M documents), agent memory DB |
-| **Report generation** | Node.js + docx npm package (DOCX), python-docx |
-| **Infrastructure** | Docker, docker-compose, Terraform |
-| **Data source** | Prozorro Public API v2.5 |
-| **Digital signatures** | asn1crypto (PKCS#7 / `.p7s` parsing) |
+| LLM | Multi-provider: Google, OpenAI, Anthropic — routed by task type |
+| Backend | Python 3.11, multi-agent orchestration |
+| Document processing | python-docx, pdfplumber, PyMuPDF (PDF→PNG), openpyxl, Tesseract OCR |
+| Databases | PostgreSQL — legislation DB (286,634 documents), agent memory DB |
+| Report generation | Node.js + docx npm package (DOCX), python-docx |
+| Infrastructure | Docker, docker-compose, Terraform |
+| Data source | ProZorro Public API v2.5 |
+| Digital signatures | asn1crypto (PKCS#7 / .p7s parsing) |
 
 ---
 
-## Data Sources
+## 📊 Market
 
-| Source | Purpose |
-|--------|---------|
-| **Prozorro Public API v2.5** | Tender data, participant bids, documents |
-| **Verkhovna Rada** (`data.rada.gov.ua`) | Ukrainian legislation database — 340,000+ normative documents |
-| **ООПЗ decisions** | Procurement appeals body regulatory database (2000+ decisions) |
-| **АМКУ decisions** | Anti-monopoly committee rulings |
+- **ProZorro Ukraine:** 800+ billion UAH annual procurement volume
+- **200,000+** active procurement participants
+- **30,000+** buyers (government agencies, municipal enterprises, hospitals, schools)
+- **EU market:** €2 trillion annually (unified public procurement directive)
 
----
-
-## Legislation Coverage
-
-The system applies and cross-references:
-- **Law No. 922-VIII** "On Public Procurement" — Arts. 16, 17, 18, 22–27, 41
-- **CMU Resolution No. 1178** (2022) — Wartime procurement special rules
-- **CMU Resolution No. 782** — Localization requirements
-- **Civil Code Arts. 634, 841, 849** — Contract law (adhesion contracts, contractor rights)
-- **CMU Resolution No. 668** — General conditions for construction contracts
+**The system scales to any jurisdiction with public procurement.**
 
 ---
 
-## Scale & Performance
+## 🔮 Roadmap
 
-- Analyzes a full tender (50+ documents) in 10–15 minutes
-- Processes participant bids with 10+ files per participant
-- Tested across 21 production tender runs (Run 10: 13 violations, 13 hidden requirements, 13 appeal grounds detected)
-- 113/113 tests passing
-
----
-
-## Phase 1 Roadmap
-
-| Agent | Status | Purpose |
-|-------|--------|---------|
-| `oopz_researcher` | ✅ Production | ООПЗ decision analysis |
-| `tender_doc_researcher` | ✅ Production | Tender document analysis |
-| `bid_researcher` | ✅ Production | Bid compliance analysis |
-| `amku_researcher` | 🔄 90% complete | Anti-Monopoly Committee decisions |
-| `td_generator` | 🔄 Planned | Tender documentation generator using accumulated requirements DB |
-| `investigation` | 🔄 Active development | Collusion investigation orchestrator (9 violation types, 4 legal strategies) |
-| `bid_doc_preparer` | 🔄 Planned | Participant document package preparation |
-
-**Planned integrations:**
-- **YouControl API** — automated verification of tender participants and buyers via Ukrainian corporate registries: beneficial owners, court decisions, financial statements, sanctions screening, license status
+- [x] TenderDoc Researcher v3.2 — tender documentation analysis
+- [x] Bid Researcher v3.3 — participant bid analysis
+- [x] OOPZ Researcher v2.0 — appeals body decision research
+- [x] AMKU Researcher (90%) — Anti-Monopoly Committee decision research
+- [x] ProZorro API integration
+- [x] Legislation database (286,634 documents, auto-updated)
+- [ ] Frontend / User dashboard
+- [ ] Tender documentation generator agent
+- [ ] YouControl API integration
+- [ ] PPOU assistant agent (complaint review support)
+- [ ] Expansion to Polish market
+- [ ] Vector database for semantic search
 
 ---
 
-## Links
+## 💼 Founder
 
-**Website:** [magilarity.com](https://magilarity.com)  
-**Organization:** [github.com/MagilarityAI](https://github.com/MagilarityAI)
+**Oleksii Fuzyk**
+Practicing public procurement lawyer, Ukraine
+10+ years in Ukrainian public procurement
+Specialization: protection of economic competition, commercial law, corporate law, and public procurement advisory
+
+*Built entirely with Claude and Claude Code*
+*Zero prior programming experience → production-ready platform in 6 months*
 
 ---
 
-## Documentation
+## 📧 Contact
 
-- [tender_doc_researcher](docs/agents/tender_doc_researcher.md) — Tender document analysis agent
-- [bid_researcher](docs/agents/bid_researcher.md) — Bid compliance analysis agent
-- [oopz_researcher](docs/agents/oopz_researcher.md) — Regulatory decisions agent
-- [Infrastructure](docs/infrastructure.md) — Technical stack, databases, deployment
-- [Roadmap](docs/roadmap.md) — Phase 1 completion plan
+**Email:** info@magilarity.com
+**Website:** magilarity.com
+
+---
+
+*© 2025-2026 Magilarity. Magical transparency in public procurement.*
