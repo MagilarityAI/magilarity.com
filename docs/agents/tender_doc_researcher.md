@@ -1,5 +1,5 @@
 # 🔍 TenderDoc Researcher
-**Status:** Production v3.2
+**Status:** Production v4.0
 **Role:** First agent in the pipeline — analyzes tender documentation before bid preparation
 
 ---
@@ -37,21 +37,27 @@ bid_researcher (receives document checklist via agent_handoffs)
 
 ---
 
-## 11-Step Pipeline
+## 12-Step Pipeline
 
 | Step | Module | Role | Critical |
 |------|--------|------|----------|
-| 1 | `classifier.py` | CPV code → classification across 13 categories | ✅ Yes |
+| 1 | `classifier.py` | CPV code → classification across 13 categories (canonical map, shared with bid_researcher) | ✅ Yes |
 | 2 | `registry.py` | Deduplication check | No |
-| 3 | `downloader.py` | JSON + tender documents + amendments | ✅ Yes |
+| 3 | `downloader.py` | JSON + tender documents + amendments (latest-version grouping by document id) | ✅ Yes |
 | 4 | `file_extractor.py` | Text extraction (docx/pdf/xlsx) | ✅ Yes |
 | 5 | `oopz_fetcher.py` | Regulatory decisions by CPV prefix | No |
-| 6 | `customer_profiler.py` | Buyer procurement history analysis | No |
-| 7 | `qa_analyzer.py` | Q&A analysis + tender amendments | No |
-| 8 | `base_analyzer.py` | 2 LLM calls: checklist + 16-point analysis | ✅ Yes |
-| 9 | `contract_analyzer.py` | Project contract legal review | No |
-| 10 | `report_formatter.py` | 6 output files generation | No |
-| 11 | `registry.py` | Save results + handoff to bid_researcher | No |
+| 6 | `customer_profiler.py` | Buyer procurement history analysis (stub) | No |
+| 7 | `qa_analyzer.py` | Q&A analysis + tender amendments (once per procurement, even with multiple lots) | No |
+| 8 | `base_analyzer.py` | 2 LLM calls: checklist + 16-point analysis; branches per active lot if lots present | ✅ Yes |
+| 9 | `contract_analyzer.py` | Project contract legal review (once per procurement) | No |
+| 10 | `report_formatter.py` | 6 output files generation (per lot if lots present) | No |
+| 11 | `registry.py` | Save results + lot-suffixed registry key if applicable | No |
+| 12 | `handoff_sender.py` | Handoff to bid_researcher (DB + file-based fallback) | No |
+
+**Multi-lot procurements (implemented 09.07.2026):** if a tender has more than one active lot,
+each is analyzed independently — separate `analysis/lot_1/`, `analysis/lot_2/` output, separate
+registry entries. Cancelled lots are skipped. Q&A analysis and contract review still run once
+per procurement (not per lot).
 
 ---
 
@@ -100,9 +106,21 @@ bid_researcher (receives document checklist via agent_handoffs)
 | 12 | Consulting | 70, 71, 73xxxxxx |
 | 13 | Simple goods | 18, 19xxxxxx |
 
+**Canonical routing source (08.07.2026):** `prompts/dk_category_map_canonical.md` — kept in
+sync with `bid_researcher`'s own `_CPV_CATEGORY_MAP` by deliberate policy (both files change
+together only). The `03` prefix conflict is resolved by splitting on the 3rd digit: `031/032/033`
+→ food products, `034` → technical goods (timber/lumber). The `71` prefix (architectural/
+engineering services) stays under consulting, compensated by a dedicated sub-block in the
+category prompt.
+
 ---
 
-## LLM Architecture — Dual-Call Design
+## LLM Architecture — Dual-Call Design, Multi-Provider
+
+All LLM calls go through a single `llm_client.call_llm(prompt, role)` entry point (unified
+09.07.2026), with the provider selected by `LLM_PROVIDER=gemini|openai|claude`. Gemini is the
+provider actually used across production runs; the Claude and OpenAI paths exist and have been
+exercised in testing.
 
 Avoids anchoring to few-shot examples by splitting into two independent calls:
 
@@ -162,6 +180,25 @@ Wartime rules (CMU Resolution No. 1178) replace standard Law No. 922-VIII:
 | Appeal after amendments | — | **5 days from publication** |
 | Non-amendable provisions | — | **Cannot be appealed** |
 
+**Amendments chain (fixed 09.07.2026):** document versions are grouped by Prozorro document
+`id`, keeping only the most recent (`dateModified`); older versions move to
+`superseded_documents`. The appeal deadline is computed through a 3-level fallback — new
+deadline after amendments → primary deadline from Q&A analysis → direct
+`submission_deadline − 3 days` — never silently `null`. The chosen path is recorded in
+`deadlines.appeal_deadline_source`.
+
+---
+
+## 🔗 Handoff to bid_researcher
+
+Real contract (v3.1, synchronized 09.07.2026): `handoff_sender.py` upserts a `pending` record
+into `agent_memory.agent_handoffs` (`context_data` with `checklist`, `winner_checklist`,
+`td_documents_path`, `cpv_code`). If the database write fails, a file-based fallback is written
+to `analysis/handoff_pending.json` for manual pickup. Each checklist item carries
+`requires_content_verification` / `verification_focus` flags that tell `bid_researcher` which
+items need deep content verification (bank guarantee form, Art. 16 qualification thresholds,
+technical specification) rather than mere presence checking.
+
 ---
 
 ## 📊 Production Results
@@ -173,3 +210,6 @@ Wartime rules (CMU Resolution No. 1178) replace standard Law No. 922-VIII:
 | 10 (best) | 13 | 13 | 13 | 721s |
 | 18 | 4 | — | 12 | — |
 | Typical | 8-13 | 7-13 | 5-13 | ~12 min |
+
+**Test coverage:** 273 pytest tests green (10.07.2026), including dedicated suites for
+multi-lot analysis (22 tests) and the amendments chain (22 tests).

@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import time
 import logging
 import requests
 from pathlib import Path
@@ -12,133 +13,115 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://public-api.prozorro.gov.ua/api/2.5"
 TIMEOUT = 30
 MAX_RETRIES = 5
+RETRY_DELAY = 2  # секунд; фактична затримка = RETRY_DELAY * номер_спроби (як у downloader.py)
 
 # Папка з локально збереженими тендерами (відносно цього файлу)
 _TENDERS_DIR = Path(__file__).parent / 'закупівлі'
 
-# Однозначні префікси — визначаємо без LLM
-# ПОРЯДОК КРИТИЧНИЙ: специфічні перед загальними
+# ─────────────────────────────────────────────────────────────────────────
+# КАНОНІЧНИЙ МАПІНГ — узгоджено з bid_researcher (main.py:81 _CPV_CATEGORY_MAP)
+# Джерело істини: prompts/dk_category_map_canonical.md (08.07.2026)
+# ⛔ Зміни — СИНХРОННО в bid_researcher/main.py та цьому файлі.
+#
+# Однозначні префікси — визначаємо без LLM.
+# ПОРЯДОК КРИТИЧНИЙ: специфічні префікси ПЕРЕД загальними (dict/list перебирається по порядку).
+# Порядок секцій ІДЕНТИЧНИЙ _CPV_CATEGORY_MAP bid_researcher.
+# ─────────────────────────────────────────────────────────────────────────
 DK_REGEX_MAP = [
-    # Кат.7 ПАЛИВО — перед загальним ^09
-    (r'^09134', 'fuel'),           # дизельне паливо
-    (r'^0911', 'fuel'),            # тверде паливо
-    (r'^0912', 'fuel'),            # газоподібне паливо
-    (r'^0913[^4]', 'fuel'),        # нафта та дистиляти (не дизель)
-    (r'^0914', 'fuel'),            # мазут
-    (r'^0921', 'fuel'),            # мастила
+    # ===== БУДІВНИЦТВО (роботи) =====
+    # 45453100 (відновлювальні роботи) винесено в AMBIGUOUS_PREFIXES — залежить від контексту
+    # "поточний ремонт" у тексті ТД. Негативний lookahead виключає його з детермінованого '^45'.
+    (r'^45(?!453100)', 'building_works'),
 
-    # Кат.6 ЖКГ та ЕНЕРГОНОСІЇ
-    (r'^0930', 'utilities_energy'),
-    (r'^0931', 'utilities_energy'),
-    (r'^0932', 'utilities_energy'),
-    (r'^0933', 'utilities_energy'),
-    (r'^651', 'utilities_energy'),
-    (r'^652', 'utilities_energy'),
-    (r'^653', 'utilities_energy'),
-    (r'^904', 'utilities_energy'),
-    (r'^905', 'utilities_energy'),
-    (r'^906', 'utilities_energy'),
+    # ===== БУДІВЕЛЬНІ МАТЕРІАЛИ ТА КОНСТРУКЦІЇ (товари) =====
+    (r'^44', 'technical_goods'),
 
-    # Кат.4 МЕДИКАМЕНТИ — 3-знак 336! перед медобладнанням
-    (r'^336', 'pharmaceuticals'),
-
-    # Кат.5 МЕДИЧНЕ ОБЛАДНАННЯ — 4-знак 331-335
-    (r'^331', 'medical_equipment'),
-    (r'^332', 'medical_equipment'),
-    (r'^333', 'medical_equipment'),
-    (r'^334', 'medical_equipment'),
-    (r'^335', 'medical_equipment'),
-
-    # Кат.3 ПРОДУКТИ ХАРЧУВАННЯ
-    (r'^03', 'food_products'),
-    (r'^15', 'food_products'),
-    (r'^553', 'food_products'),    # ресторани
-    (r'^555', 'food_products'),    # їдальні, кейтеринг
-
-    # Кат.2 ПОТОЧНИЙ РЕМОНТ та ТО
+    # ===== РЕМОНТ ТА ТЕХНІЧНЕ ОБСЛУГОВУВАННЯ =====
     (r'^50', 'maintenance_works'),
+    (r'^51', 'maintenance_works'),
 
-    # Кат.10 IT ПОСЛУГИ та ПЗ
-    (r'^48', 'it_services'),
-    (r'^302', 'it_services'),      # комп'ютерне обладнання
-    (r'^303', 'it_services'),
-    (r'^724', 'it_services'),      # IT послуги (72400000+)
-    (r'^725', 'it_services'),
-    (r'^726', 'it_services'),
-    (r'^727', 'it_services'),
-    (r'^728', 'it_services'),
-    (r'^729', 'it_services'),
+    # ===== ПРОДУКТИ ХАРЧУВАННЯ =====
+    (r'^553', 'food_products'),    # ресторани (специфічніше за загальний 55)
+    (r'^555', 'food_products'),    # їдальні, кейтеринг
+    (r'^15', 'food_products'),
 
-    # Кат.8 ТЕХНІЧНО СКЛАДНІ ТОВАРИ
-    (r'^311', 'technical_goods'),  # електродвигуни, генератори
-    (r'^312', 'technical_goods'),  # розподіл електроенергії
-    (r'^313', 'technical_goods'),  # кабелі
-    (r'^314', 'technical_goods'),  # акумулятори
-    (r'^315', 'technical_goods'),  # освітлення
-    (r'^316', 'technical_goods'),  # електрообладнання
-    (r'^317', 'technical_goods'),  # електронне обладнання
-    (r'^322', 'technical_goods'),  # апаратура передачі даних
-    (r'^323', 'technical_goods'),  # телевізори, радіо
-    (r'^324', 'technical_goods'),  # мережі
-    (r'^325', 'technical_goods'),  # телекомунікаційне обладнання
-    (r'^38', 'technical_goods'),   # лабораторне обладнання
-    (r'^42', 'technical_goods'),   # промислова техніка
-    (r'^43', 'technical_goods'),   # гірничо-будівельне обладнання
+    # ===== МЕДИЧНЕ ОБЛАДНАННЯ ТА ФАРМА =====
+    # УВАГА: специфічніші 3-значні префікси ОБОВ'ЯЗКОВО перед "33" (fallback)
+    (r'^337', 'simple_goods'),         # засоби особистої гігієни (НЕ медобладнання)
+    (r'^336', 'pharmaceuticals'),      # фармацевтична хімія (Порядок №708 — 3-й знак, виняток)
+    (r'^331', 'medical_equipment'),    # медичні вироби та пристрої
+    (r'^33', 'medical_equipment'),     # медичне обладнання та фарма (fallback: 330,332-335)
 
-    # Кат.9 ВИТРАТНІ МАТЕРІАЛИ та КАНЦЕЛЯРІЯ
-    (r'^30190', 'consumables'),    # офісне приладдя
-    (r'^30192', 'consumables'),    # канцелярія
-    (r'^30197', 'consumables'),    # дрібна канцелярія
-    (r'^30199', 'consumables'),    # канцелярське приладдя
-    (r'^301', 'consumables'),      # інше офісне (картриджі тощо)
-    (r'^24', 'consumables'),       # хімічні продукти
-    (r'^398', 'consumables'),      # засоби для прибирання
+    # ===== ТЕХНІЧНІ ТОВАРИ ТА ОБЛАДНАННЯ =====
+    (r'^31', 'technical_goods'),   # електричне обладнання, освітлення
+    (r'^32', 'technical_goods'),   # радіо, телеком, мережеве обладнання
+    (r'^34', 'technical_goods'),   # транспортне обладнання та запчастини
+    (r'^35', 'technical_goods'),   # обладнання безпеки, пожежне, поліцейське
+    (r'^38', 'technical_goods'),   # вимірювальне та лабораторне обладнання
+    (r'^42', 'technical_goods'),   # промислове обладнання
+    (r'^43', 'technical_goods'),   # гірничодобувне та будівельне обладнання
+    (r'^16', 'technical_goods'),   # сільськогосподарська техніка
+    (r'^14', 'technical_goods'),   # гірнича сировина, метали, мінерали
+    (r'^30', 'technical_goods'),   # офісна та комп'ютерна техніка (hardware)
 
-    # Кат.13 ТОВАРИ ПРОСТІ
-    (r'^18', 'simple_goods'),      # одяг, взуття
-    (r'^19', 'simple_goods'),      # текстиль
-    (r'^22', 'simple_goods'),      # книги, друкована продукція
-    (r'^34', 'simple_goods'),      # транспортні засоби (товари)
-    (r'^37', 'simple_goods'),      # спортивний інвентар, іграшки
-    (r'^391', 'simple_goods'),     # меблі
-    (r'^392', 'simple_goods'),     # приладдя
-    (r'^393', 'simple_goods'),
-    (r'^395', 'simple_goods'),     # текстильні вироби
-    (r'^397', 'simple_goods'),     # побутові прилади
+    # ===== ПАЛИВО ТА ПММ =====
+    (r'^09', 'fuel'),               # паливо, ПММ, газ, вугілля, енергоносії (fallback увесь розділ 09)
 
-    # Кат.11 ПОСЛУГИ ЗАГАЛЬНІ — однозначні
-    (r'^551', 'general_services'),
-    (r'^60', 'general_services'),
-    (r'^63', 'general_services'),
-    (r'^64', 'general_services'),
-    (r'^66', 'general_services'),
-    (r'^70', 'general_services'),
-    (r'^75', 'general_services'),
-    (r'^77', 'general_services'),
-    (r'^791', 'general_services'),  # юридичні
-    (r'^792', 'general_services'),  # бухгалтерські
-    (r'^795', 'general_services'),
-    (r'^796', 'general_services'),
-    (r'^797', 'general_services'),  # охорона
-    (r'^798', 'general_services'),  # видання
-    (r'^80', 'general_services'),   # освіта
-    (r'^85', 'general_services'),   # охорона здоров'я
-    (r'^907', 'general_services'),
-    (r'^92', 'general_services'),
-    (r'^98', 'general_services'),
+    # ===== IT =====
+    (r'^48', 'it_services'),        # пакети програмного забезпечення
+    (r'^72', 'it_services'),        # IT послуги, розробка ПЗ
+
+    # ===== ХІМІЧНА ПРОДУКЦІЯ ТА ВИТРАТНІ МАТЕРІАЛИ =====
+    (r'^24', 'consumables'),        # хімічна продукція, фарби, клеї, добрива
+
+    # ===== ПРОСТІ ТОВАРИ =====
+    (r'^18', 'simple_goods'),       # одяг та взуття
+    (r'^19', 'simple_goods'),       # шкіра, текстиль, гума, пластмаси
+    # 03 розщеплено за 3-м знаком, рішення користувача 09.07.2026:
+    # 031-033 — реальні харчові закупівлі шкіл/лікарень (профіль ХАССП), 034 — деревина/лісоматеріали
+    # (профіль як будматеріали 44). Специфічні префікси ПЕРЕД fallback '^03'.
+    (r'^031', 'food_products'),     # продукція рослинництва, харчова сировина
+    (r'^032', 'food_products'),     # продукція тваринництва, харчова сировина
+    (r'^033', 'food_products'),     # продукція рибальства, харчова сировина
+    (r'^034', 'technical_goods'),   # деревина, лісоматеріали (профіль будматеріалів)
+    (r'^03', 'simple_goods'),       # сільськогосподарська та фермерська продукція (fallback, хвости розділу)
+    (r'^22', 'simple_goods'),       # друкована продукція, книги, канцтовари
+    (r'^37', 'simple_goods'),       # спортивний інвентар, іграшки, музінструменти
+    (r'^39', 'simple_goods'),       # меблі, побутові прилади, приладдя для прибирання
+
+    # ===== КОМУНАЛЬНІ ПОСЛУГИ ТА ЕНЕРГІЯ =====
+    (r'^65', 'utilities_energy'),   # газо-, водопостачання
+    (r'^40', 'utilities_energy'),   # електро/газо/теплопостачання
+    (r'^41', 'utilities_energy'),   # питна та очищена вода
+    (r'^64', 'utilities_energy'),   # поштові та телекомунікаційні послуги
+
+    # ===== КОНСУЛЬТАЦІЙНІ ПОСЛУГИ =====
+    (r'^71', 'consulting_services'),  # архітектурні, інженерні, інспекційні послуги
+    (r'^73', 'consulting_services'),  # наукові дослідження та розробки
+    (r'^70', 'consulting_services'),  # послуги у сфері нерухомості
+    (r'^66', 'consulting_services'),  # фінансові та страхові послуги
+
+    # ===== ЗАГАЛЬНІ ПОСЛУГИ =====
+    (r'^79', 'general_services'),   # ділові послуги (юр., бухг., маркетинг, охорона, консалтинг)
+    (r'^90', 'general_services'),   # санітарія, поводження з відходами, довкілля
+    (r'^85', 'general_services'),   # охорона здоров'я та соціальні послуги
+    (r'^55', 'general_services'),   # готельні, ресторанні послуги (fallback, крім 553/555 вище)
+    (r'^60', 'general_services'),   # транспортні послуги (дорожній, залізничний)
+    (r'^61', 'general_services'),   # морський та прибережний транспорт
+    (r'^62', 'general_services'),   # авіаційні послуги та ТО авіатехніки
+    (r'^63', 'general_services'),   # допоміжні транспортні послуги, складування
+    (r'^75', 'general_services'),   # послуги органів державної влади
+    (r'^76', 'general_services'),   # нафтогазові послуги
+    (r'^77', 'general_services'),   # сільськогосподарські, лісові, рибальські послуги
+    (r'^80', 'general_services'),   # освіта та навчання
+    (r'^92', 'general_services'),   # відпочинок, культура, спорт
+    (r'^98', 'general_services'),   # інші послуги
 ]
 
-# Неоднозначні префікси — потрібен Sonnet
+# Неоднозначні префікси — потрібен LLM (справді залежать від контексту тексту ТД,
+# НЕ покриваються детермінованою таблицею вище).
 AMBIGUOUS_PREFIXES = [
-    r'^45',    # building_works vs maintenance_works (45453100 = відновлювальні — залежить від контексту)
-    r'^44',    # technical_goods vs building_works (будматеріали)
-    r'^71',    # general_services (архітект.) vs building_works (для будівн.)
-    r'^722',   # it_services vs consulting_services (72200000-72262000)
-    r'^723',   # it_services vs consulting_services
-    r'^73',    # general_services vs consulting_services
-    r'^793',   # ринкові дослідження — consulting
-    r'^7941',  # 79411000=consulting_services vs загальний 79400000=general
-    r'^7942',  # 79421000=consulting_services vs загальний 79420000=general
+    r'^45453100',  # building_works (капітальний об'єкт) vs maintenance_works (контекст "поточний ремонт")
 ]
 
 ALL_CATEGORIES = [
@@ -157,26 +140,85 @@ ALL_CATEGORIES = [
     'simple_goods',         # Кат.13
 ]
 
+# ─────────────────────────────────────────────────────────────────────────
+# Канонічна таблиця для CLASSIFICATION_PROMPT — читається з
+# prompts/dk_category_map_canonical.md (узгоджено з bid_researcher 08.07.2026).
+# LLM-виклик рідкісний (лише для AMBIGUOUS_PREFIXES) — розмір промпту не критичний.
+# Кешується в модульну константу при першому імпорті; якщо файл відсутній —
+# fallback на вбудовану коротку виписку (щоб pipeline не падав).
+# ─────────────────────────────────────────────────────────────────────────
+_CANONICAL_MAP_PATH = Path(__file__).parent / 'prompts' / 'dk_category_map_canonical.md'
+
+_FALLBACK_CATEGORY_TABLE = """- building_works: будівельні роботи (нове будівництво, капітальний ремонт, реконструкція, ДК 45xxxxxx з цими словами)
+- maintenance_works: поточний ремонт, технічне обслуговування (ДК 45453100 з контекстом "поточний ремонт", або 50xxxxxx, 51xxxxxx)
+- food_products: продукти харчування та напої (ДК 15xxxxxx, 553xxxxx, 555xxxxx, 031xxxxx-033xxxxx: рослинництво/тваринництво/рибальство як харчова сировина)
+- pharmaceuticals: медикаменти, ліки, фармацевтика (ДК 336xxxxx: таблетки, капсули, ін'єкції, вакцини, препарати)
+- medical_equipment: медичне обладнання та прилади (ДК 33xxxxxx, 331xxxxx: апарат, прилад, обладнання, пристрій)
+- utilities_energy: ЖКГ, електроенергія, теплопостачання, водопостачання, газ, пошта/телеком (ДК 65xxxxxx, 40xxxxxx, 41xxxxxx, 64xxxxxx)
+- fuel: паливо (бензин, дизель, мазут, тверде паливо, енергоносії — ДК 09xxxxxx)
+- technical_goods: технічно складні товари, обладнання, будматеріали (ДК 14, 16, 30-32, 34-35, 38, 42-44xxxxxx, 034xxxxx: деревина/лісоматеріали)
+- consumables: витратні матеріали, хімічна продукція (ДК 24xxxxxx)
+- it_services: IT послуги, програмне забезпечення (ДК 48xxxxxx, 72xxxxxx)
+- general_services: послуги загального характеру (охорона, прибирання, транспорт, освіта, ділові послуги — ДК 55, 60-63, 75-77, 79, 80, 85, 90, 92, 98)
+- consulting_services: консультаційні, фінансові, архітектурно-інженерні, наукові послуги (ДК 66xxxxxx, 70xxxxxx, 71xxxxxx, 73xxxxxx)
+- simple_goods: прості товари — одяг, взуття, текстиль, книги, меблі, сільгосппродукція (ДК 03xxxxxx fallback поза 031-034, 18-19, 22, 37, 39xxxxxx, 337xxxxx)"""
+
+
+def _load_canonical_category_table() -> str:
+    """
+    Завантажує канонічну таблицю префіксів ДК → категорія з .md файла
+    (єдине джерело істини, узгоджене з bid_researcher).
+
+    Fallback на вбудовану коротку виписку якщо файл відсутній/недоступний —
+    щоб класифікація не падала.
+    """
+    try:
+        text = _CANONICAL_MAP_PATH.read_text(encoding='utf-8')
+        # Витягуємо тільки розділ "ПОВНИЙ СПИСОК ПРЕФІКСІВ" (компактний, машинний) —
+        # весь файл занадто великий (конфлікти, пояснення) для вставки у кожен LLM виклик.
+        marker = '## ПОВНИЙ СПИСОК ПРЕФІКСІВ'
+        idx = text.find(marker)
+        if idx == -1:
+            logger.warning(
+                "classifier: маркер '%s' не знайдено у %s — використовую fallback таблицю",
+                marker, _CANONICAL_MAP_PATH,
+            )
+            return _FALLBACK_CATEGORY_TABLE
+        section = text[idx:]
+        # Обрізаємо до наступного "---" (кінець розділу) або кінця файлу
+        end_idx = section.find('\n---', 1)
+        if end_idx != -1:
+            section = section[:end_idx]
+        return section.strip()
+    except OSError as e:
+        logger.warning(
+            "classifier: не вдалося прочитати канонічну таблицю %s (%s) — використовую fallback",
+            _CANONICAL_MAP_PATH, e,
+        )
+        return _FALLBACK_CATEGORY_TABLE
+
+
+# Кешується один раз при імпорті модуля.
+CANONICAL_CATEGORY_TABLE = _load_canonical_category_table()
+
 CLASSIFICATION_PROMPT = """Визнач категорію закупівлі за кодом ДК 021:2015 та назвою предмету.
 
 Код ДК: {dk_code}
 Назва закупівлі: {title}
 Опис предмету: {description}
 
-Категорії та правила:
-- building_works: будівельні роботи (нове будівництво, капітальний ремонт, реконструкція, ДК 45xxxxxx з цими словами)
-- maintenance_works: поточний ремонт, технічне обслуговування (ДК 45xxxxxx або 44xxxxxx або 50xxxxxx з "поточний", "технічне обслуговування")
-- food_products: продукти харчування та напої (ДК 03xxxxxx, 15xxxxxx, 553xxxxx, 555xxxxx)
-- pharmaceuticals: медикаменти, ліки, фармацевтика (ДК 336xxxxx: таблетки, капсули, ін'єкції, вакцини, препарати)
-- medical_equipment: медичне обладнання та прилади (ДК 331-335xxxxx: апарат, прилад, обладнання, пристрій)
-- utilities_energy: ЖКГ, електроенергія, теплопостачання, водопостачання, газ (ДК 093x, 651-653, 904-906)
-- fuel: паливо (бензин, дизель, мазут, тверде паливо — ДК 0911-0914, 0921)
-- technical_goods: технічно складні товари, обладнання (ДК 311-317, 322-325, 38xxxxxx, 42-43xxxxxx)
-- consumables: витратні матеріали, канцелярія, хімічні продукти (ДК 301xxxxx, 24xxxxxx, 398xxxxx)
-- it_services: IT послуги, програмне забезпечення, комп'ютерне обладнання (ДК 48xxxxxx, 302-303, 724-729)
-- general_services: послуги загального характеру (охорона, прибирання, транспорт, освіта — ДК 60, 63-64, 66, 70, 75, 77, 791-792, 795-798, 80, 85, 92, 98)
-- consulting_services: консультаційні, юридичні, аудиторські, маркетингові послуги (ДК 722-723, 73xxxxxx, 793xxxxx, 7941-7942)
-- simple_goods: прості товари — одяг, взуття, текстиль, книги, меблі, побутові вироби (ДК 18-19, 22, 34, 37, 391-393, 395, 397)
+Канонічна таблиця відповідності префіксів ДК 021:2015 → категорія
+(узгоджено з bid_researcher, перевіряй префікси зверху вниз, специфічні — першими):
+
+""" + CANONICAL_CATEGORY_TABLE + """
+
+Категорії (ідентифікатори для відповіді): building_works, maintenance_works, food_products,
+pharmaceuticals, medical_equipment, utilities_energy, fuel, technical_goods, consumables,
+it_services, general_services, consulting_services, simple_goods.
+
+Особливе правило для ДК 45453100 (Відновлювальні роботи): якщо контекст вказує на
+капітальний ремонт/реконструкцію об'єкта будівництва → building_works;
+якщо контекст явно вказує на поточний ремонт конкретного об'єкта → maintenance_works.
 
 Відповідь: тільки одне слово — ідентифікатор категорії з наведеного списку."""
 
@@ -211,7 +253,11 @@ def _fetch_tender_json(internal_id: str) -> dict:
         except Exception as e:
             if attempt == MAX_RETRIES - 1:
                 raise RuntimeError(f"Cannot fetch tender {internal_id} after {MAX_RETRIES} attempts: {e}")
-            logger.warning(f"Fetch attempt {attempt + 1} failed for {internal_id}: {e}")
+            wait = RETRY_DELAY * (attempt + 1)
+            logger.warning(
+                f"Fetch attempt {attempt + 1} failed for {internal_id}: {e} — retry in {wait}s"
+            )
+            time.sleep(wait)
     return {}
 
 

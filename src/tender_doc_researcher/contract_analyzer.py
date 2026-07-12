@@ -63,6 +63,9 @@ def _calculate_appeal_deadline(submission_deadline: str) -> str:
         return 'невідомо'
 
 
+CONTRACT_TEXT_LIMIT = 80000
+
+
 def _build_contract_prompt(
     contract_text: str,
     contract_filename: str,
@@ -85,7 +88,7 @@ def _build_contract_prompt(
 ФАЙЛ ДОГОВОРУ: {contract_filename}
 
 ТЕКСТ ДОГОВОРУ:
-{contract_text[:80000]}
+{contract_text[:CONTRACT_TEXT_LIMIT]}
 
 ВАЖЛИВО щодо one_sided_conditions: Перевір КОЖНИЙ пункт договору методично. У великих будівельних договорах (50+ млн грн) типово 10-20 односторонніх умов на шкоду підряднику:
 - Права замовника на одностороннє розірвання/зміну обсягів без симетричних прав підрядника
@@ -202,6 +205,14 @@ def analyze(
         contract_path.name, len(contract_text),
     )
 
+    is_truncated = len(contract_text) > CONTRACT_TEXT_LIMIT
+    if is_truncated:
+        logger.warning(
+            "contract_analyzer: текст договору '%s' обрізано з %d до %d символів "
+            "(CONTRACT_TEXT_LIMIT) — можлива втрата умов у хвості договору",
+            contract_path.name, len(contract_text), CONTRACT_TEXT_LIMIT,
+        )
+
     # ── 3. Отримати дедлайн оскарження ───────────────────────────────────────
     # Пріоритет: qa_analysis → розрахунок з submission_deadline
     appeal_deadline: str = (
@@ -246,6 +257,7 @@ def analyze(
         f"Зміни до умов договору — через ООПЗ до {appeal_deadline}"
     )
     result['analysis_duration_sec'] = round(duration, 1)
+    result['truncated'] = is_truncated
 
     logger.info(
         "contract_analyzer: завершено. balance=%s, risk=%s, "

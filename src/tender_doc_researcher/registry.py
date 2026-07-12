@@ -23,7 +23,8 @@ REGISTRY_XLSX = REGISTRY_DIR / 'registry.xlsx'
 
 XLSX_HEADERS = [
     'public_id', 'internal_id', 'customer', 'dk_code', 'subject',
-    'expected_value', 'analyzed_at', 'category', 'verdict', 'short_summary', 'folder_path'
+    'expected_value', 'analyzed_at', 'category', 'verdict', 'short_summary', 'folder_path',
+    'lot_id', 'lot_title',
 ]
 
 
@@ -62,18 +63,30 @@ def _sync_xlsx(registry: dict) -> None:
         logger.error(f"Помилка синхронізації registry.xlsx: {e}")
 
 
-def is_tender_analyzed(public_id: str) -> Optional[dict]:
+def _registry_key(public_id: str, lot_suffix: Optional[str] = None) -> str:
     """
-    Перевіряє чи тендер вже проаналізований.
+    Ключ запису реєстру. Однолотові закупівлі (lot_suffix=None) — ключ БЕЗ змін
+    (public_id), для повної сумісності зі старим форматом реєстру. Мультилотові —
+    'UA-...:lot1' тощо (К4 аудиту, CLAUDE.md «Правило щодо лотів — ФІНАЛЬНО»:
+    окремий запис реєстру на кожен лот).
+    """
+    return f"{public_id}:{lot_suffix}" if lot_suffix else public_id
+
+
+def is_tender_analyzed(public_id: str, lot_suffix: Optional[str] = None) -> Optional[dict]:
+    """
+    Перевіряє чи тендер (або конкретний лот) вже проаналізований.
 
     Args:
-        public_id: Публічний ідентифікатор тендера (наприклад, UA-2024-01-01-000001-a).
+        public_id:  Публічний ідентифікатор тендера (наприклад, UA-2024-01-01-000001-a).
+        lot_suffix: Опціонально — суфікс лоту (наприклад 'lot1'). Якщо None —
+                    перевіряється однолотовий/без-лотовий запис (як раніше).
 
     Returns:
         Запис реєстру якщо тендер вже аналізувався, або None.
     """
     registry = _load_registry()
-    return registry.get(public_id)
+    return registry.get(_registry_key(public_id, lot_suffix))
 
 
 def register_tender(
@@ -87,9 +100,12 @@ def register_tender(
     folder_path: str,
     verdict: str = '',
     short_summary: str = '',
+    lot_suffix: Optional[str] = None,
+    lot_id: Optional[str] = None,
+    lot_title: Optional[str] = None,
 ) -> dict:
     """
-    Додає або оновлює запис тендера у реєстрі.
+    Додає або оновлює запис тендера (або одного лоту) у реєстрі.
 
     Args:
         public_id:      Публічний ідентифікатор тендера.
@@ -99,14 +115,19 @@ def register_tender(
         subject:        Предмет закупівлі.
         expected_value: Очікувана вартість.
         category:       Категорія (одна з 13 категорій ДК).
-        folder_path:    Шлях до папки з документами тендера.
+        folder_path:    Шлях до папки з документами тендера (або лоту).
         verdict:        Висновок аналізу (опціонально).
         short_summary:  Короткий підсумок аналізу (опціонально).
+        lot_suffix:     Опціонально — суфікс лоту для ключа реєстру ('lot1').
+                        None (за замовчуванням) → однолотова поведінка без змін.
+        lot_id:         Опціонально — id лоту з Prozorro (для довідки в записі).
+        lot_title:      Опціонально — назва лоту.
 
     Returns:
         Створений або оновлений запис реєстру.
     """
     registry = _load_registry()
+    key = _registry_key(public_id, lot_suffix)
     entry = {
         'public_id': public_id,
         'internal_id': internal_id,
@@ -119,10 +140,12 @@ def register_tender(
         'verdict': verdict,
         'short_summary': short_summary,
         'folder_path': folder_path,
+        'lot_id': lot_id or '',
+        'lot_title': lot_title or '',
     }
-    registry[public_id] = entry
+    registry[key] = entry
     _save_registry(registry)
-    logger.info(f"Тендер зареєстровано: {public_id}")
+    logger.info(f"Тендер зареєстровано: {key}")
     return entry
 
 

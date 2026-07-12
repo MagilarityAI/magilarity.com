@@ -68,6 +68,89 @@ def _is_amendment(doc: dict) -> bool:
 is_amendment_file = _is_amendment
 
 
+def _doc_published_date(doc: dict) -> str:
+    """
+    Дата оприлюднення документа. Prozorro для кожного документа віддає
+    'datePublished' (дата першої публікації версії) та 'dateModified'
+    (дата останньої зміни цього конкретного запису).
+    Для дедлайну оскарження після змін (п.59 абз.5 КМУ 1178) важлива саме
+    дата ОПРИЛЮДНЕННЯ змін → пріоритет datePublished, fallback dateModified.
+    """
+    return doc.get("datePublished") or doc.get("dateModified") or ""
+
+
+def _group_latest_document_versions(raw_docs: list[dict]) -> tuple[list[dict], list[dict]]:
+    """
+    Групує documents[] Prozorro по document id та лишає тільки ОСТАННЮ версію
+    кожного документа (найпізніший dateModified).
+
+    Механіка версій у Prozorro API v2.5 (див. скіл prozorro-api): при заміні
+    файлу замовником у documents[] з'являється НОВИЙ запис із тим самим `id`,
+    але іншим `url`/`dateModified` — попередні версії залишаються в масиві
+    (Prozorro documents є append-only history, не in-place перезаписом).
+    Тобто "остання версія" == запис з max(dateModified) для даного id.
+
+    Якщо документ взагалі не має `id` (не повинно траплятись за специфікацією,
+    але захищаємось) — трактуємо кожен такий запис як унікальний (без групування).
+
+    Returns:
+        (latest_docs, superseded_docs) — латест-версії (у вихідному порядку
+        першої появи id) та відкинуті старіші версії (з позначкою superseded_by).
+    """
+    by_id: dict[str, list[dict]] = {}
+    order: list[str] = []
+    no_id_docs: list[dict] = []
+
+    for doc in raw_docs:
+        doc_id = doc.get("id")
+        if not doc_id:
+            no_id_docs.append(doc)
+            continue
+        if doc_id not in by_id:
+            by_id[doc_id] = []
+            order.append(doc_id)
+        by_id[doc_id].append(doc)
+
+    latest_docs: list[dict] = []
+    superseded_docs: list[dict] = []
+
+    for doc_id in order:
+        versions = by_id[doc_id]
+        if len(versions) == 1:
+            latest_docs.append(versions[0])
+            continue
+        # Сортуємо за dateModified (fallback datePublished) — найновіша останньою
+        versions_sorted = sorted(
+            versions,
+            key=lambda d: d.get("dateModified") or d.get("datePublished") or "",
+        )
+        newest = versions_sorted[-1]
+        older = versions_sorted[:-1]
+        latest_docs.append(newest)
+        for old in older:
+            superseded_docs.append(
+                {
+                    "id": old.get("id", ""),
+                    "title": old.get("title", ""),
+                    "dateModified": old.get("dateModified") or old.get("datePublished") or "",
+                    "superseded_by": newest.get("dateModified") or newest.get("datePublished") or "",
+                }
+            )
+        if len(older) > 0:
+            logger.info(
+                "Документ id=%s: знайдено %d версій, беремо останню "
+                "(dateModified=%s), відкинуто %d старіших",
+                doc_id, len(versions), newest.get("dateModified"), len(older),
+            )
+
+    # Документи без id — пропускаємо через дедуп за (title, url), бо групувати
+    # по id неможливо; regex-дедуп суфіксу _N у base_analyzer лишається другим
+    # рубежем захисту від дублів імені файлу.
+    latest_docs.extend(no_id_docs)
+
+    return latest_docs, superseded_docs
+
+
 def _fetch_with_retry(url: str, description: str = "") -> requests.Response:
     """GET-запит з повтором при помилках. Піднімає останній виняток якщо всі спроби вичерпані."""
     last_exc: Exception | None = None
@@ -165,6 +248,19 @@ def download_tender(internal_id: str) -> dict[str, Any]:
     raw_docs: list[dict] = data.get("documents", [])
     logger.info("Знайдено документів у JSON: %d", len(raw_docs))
 
+    # Prozorro documents[] — append-only історія версій: заміна файлу додає
+    # НОВИЙ запис з тим самим id, старий запис лишається в масиві. Групуємо
+    # по id і завантажуємо ТІЛЬКИ останню версію кожного документа (CRITICAL
+    # RULE з CLAUDE.md — аналізувати останню редакцію ТД). Regex-дедуп
+    # суфіксу _N імені файлу в base_analyzer._combine_td_texts лишається
+    # другим рубежем (для рідкісного випадку документів без id).
+    docs_to_download, superseded_documents = _group_latest_document_versions(raw_docs)
+    if superseded_documents:
+        logger.info(
+            "Відкинуто %d застарілих версій документів (замінені новішими)",
+            len(superseded_documents),
+        )
+
     downloaded_files: list[dict] = []
     failed_files: list[str] = []
     amendment_files: list[dict] = []
@@ -172,12 +268,13 @@ def download_tender(internal_id: str) -> dict[str, Any]:
     # Відстежуємо вже використані назви файлів (уникаємо перезапису)
     used_names: set[str] = set()
 
-    for doc in raw_docs:
+    for doc in docs_to_download:
         doc_id = doc.get("id", "")
         title = doc.get("title", f"document_{doc_id}")
         url_dl = doc.get("url", "")
         doc_type = doc.get("documentType", "")
         doc_format = doc.get("format", "")
+        date_published = _doc_published_date(doc)
 
         if not url_dl:
             logger.warning("Документ '%s' не має URL, пропускаємо", title)
@@ -216,6 +313,11 @@ def download_tender(internal_id: str) -> dict[str, Any]:
                 "is_amendment": is_amend,
                 "document_type": doc_type,
                 "format": doc_format,
+                "date_published": date_published,
+                # Лот-метадані (К4 аудиту): Prozorro documents[] може мати
+                # relatedLot (id лоту) для документів специфічних одному лоту;
+                # None/відсутнє = спільний документ закупівлі (типово ТД).
+                "related_lot": doc.get("relatedLot"),
             }
             downloaded_files.append(file_info)
             if is_amend:
@@ -224,12 +326,26 @@ def download_tender(internal_id: str) -> dict[str, Any]:
             failed_files.append(title)
 
     td_has_amendments = len(amendment_files) > 0
-    if td_has_amendments:
+
+    # ── Дата змін ТД: найпізніша серед усіх файлів змін ────────────────────
+    # (кілька файлів змін можливі — кожні наступні зміни публікуються окремим
+    # документом; юридично релевантна дата для п.59 абз.5 — дата ОСТАННІХ змін)
+    amendments_date: str | None = None
+    if amendment_files:
+        dated = [f["date_published"] for f in amendment_files if f.get("date_published")]
+        if dated:
+            amendments_date = max(dated)
         logger.info(
-            "Виявлено %d файл(ів) змін до ТД: %s",
+            "Виявлено %d файл(ів) змін до ТД: %s (amendments_date=%s)",
             len(amendment_files),
             [f["title"] for f in amendment_files],
+            amendments_date,
         )
+        if not amendments_date:
+            logger.warning(
+                "td_has_amendments=True, але жоден amendment-файл не має "
+                "datePublished/dateModified — amendments_date залишається None"
+            )
 
     # ── 5. Обробляємо Q&A ─────────────────────────────────────────────────────
     raw_questions: list[dict] = data.get("questions", [])
@@ -266,6 +382,13 @@ def download_tender(internal_id: str) -> dict[str, Any]:
     enquiry_deadline: str = enquiry_period.get("endDate", "")
     status: str = data.get("status", "")
 
+    # ── 8. Лоти та позиції (К4 аудиту — мультилотові закупівлі) ────────────────
+    # Сирі lots[]/items[] з Prozorro без трансформації — розгалуження та побудова
+    # lot_context виконується у main.py (одна закупівля = один код ДК, але кожен
+    # лот аналізується окремо — CLAUDE.md «Правило щодо лотів — ФІНАЛЬНО»).
+    lots: list[dict] = data.get("lots", [])
+    items: list[dict] = data.get("items", [])
+
     # ── 7. Формуємо результат ─────────────────────────────────────────────────
     result: dict[str, Any] = {
         "internal_id": internal_id,
@@ -277,16 +400,22 @@ def download_tender(internal_id: str) -> dict[str, Any]:
         "failed_files": failed_files,
         "td_has_amendments": td_has_amendments,
         "amendment_files": amendment_files,
+        "amendments_date": amendments_date,
+        "superseded_documents": superseded_documents,
         "questions": questions,
         "questions_total": len(questions),
         "questions_answered": questions_answered,
         "submission_deadline": submission_deadline,
         "enquiry_deadline": enquiry_deadline,
         "status": status,
+        "lots": lots,
+        "items": items,
     }
 
     logger.info(
-        "Завантаження завершено: %d файлів, %d помилок, amendments=%s",
+        "Завантаження завершено: %d файлів, %d помилок, amendments=%s "
+        "(amendments_date=%s), superseded_versions=%d",
         len(downloaded_files), len(failed_files), td_has_amendments,
+        amendments_date, len(superseded_documents),
     )
     return result

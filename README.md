@@ -40,7 +40,7 @@ The system takes a ProZorro tender number and generates a complete legal analysi
 
 ---
 
-## 🤖 Architecture — 5 Specialized Agents
+## 🤖 Architecture — 8 Agents (3 production, 1 in development, 4 designed)
 
 ```
 oopz_researcher ──────────────────────────────────────────────┐
@@ -50,15 +50,26 @@ tender_doc_researcher ───────────────────�
 bid_researcher                                                  │
     ↓ (bid compliance report)                                  │
 investigation (orchestrator) ──── reads all results ───────────┘
+
+amku_researcher → agent_memory.amku_bid_rigging_knowledge → investigation
+complaint_researcher (designed) → PPOU complaint review, consumes oopz_researcher's precedent table
+
+BUYER SIDE:       td_creator (designed)  — TD constructor  ←verified by— tender_doc_researcher
+PARTICIPANT SIDE: bid_creator (designed) — bid package generator ←verified by— bid_researcher
 ```
 
 | Agent | Status | Purpose |
 |-------|--------|---------|
-| `tender_doc_researcher` | ✅ Production v3.2 | Full tender documentation analysis — 16 legal criteria + contract review + 13 procurement categories |
-| `bid_researcher` | ✅ Production v3.3 | Participant bid analysis — document compliance, technical spec comparison, digital signature verification |
-| `oopz_researcher` | ✅ Production v2.0 | PPOU decision analysis — building regulatory precedent database |
-| `amku_researcher` | 🔄 Beta | Anti-Monopoly Committee decision research |
-| `investigation` | 🔄 In development | Main orchestrator — coordinates all agents for full investigation |
+| [`tender_doc_researcher`](tender_doc_researcher.md) | ✅ Production v4.0 | Full tender documentation analysis — 16 legal criteria + contract review + 13 procurement categories + multi-lot support |
+| [`bid_researcher`](bid_researcher.md) | ✅ Production v3.4 | Participant bid analysis — document compliance, technical spec comparison, digital signature verification |
+| [`oopz_researcher`](oopz_researcher.md) | ✅ Production v2.0 | PPOU decision analysis — building regulatory precedent database, writes to `oopz_decisions` knowledge table |
+| [`amku_researcher`](amku_researcher.md) | 🔄 In development (core repaired) | Anti-Monopoly Committee decision research — builds evidence/reasoning knowledge base for `investigation` |
+| [`investigation`](investigation.md) | 🔄 Designed (July 2026) | Main orchestrator — bid-rigging investigations following the AMCU specialist algorithm; implementation pending |
+| [`complaint_researcher`](complaint_researcher.md) | 🔄 Designed (July 2026) | PPOU complaint review assistant — drafts decision proposals for a human specialist; implementation pending |
+| [`td_creator`](td_creator.md) | 🔄 Designed (July 2026) | Tender documentation constructor for buyers — requirements base + precedent-backed risk warnings; implementation pending |
+| [`bid_creator`](bid_creator.md) | 🔄 Designed (July 2026) | Participant bid package generator — profile-driven documents bound verbatim to TD requirements; implementation pending |
+
+**Platform:** [Platform architecture (frontend + backend)](platform.md) — user cabinets for both market sides, FastAPI gateway, task queue, billing, notifications; designed July 2026, implementation pending. Includes the cloud credits usage plan.
 
 ---
 
@@ -211,16 +222,19 @@ Processes decisions of the Procurement Appeals Body (PPOU) and builds a regulato
 
 ## 🔮 Roadmap
 
-- [x] TenderDoc Researcher v3.2 — tender documentation analysis
-- [x] Bid Researcher v3.3 — participant bid analysis
-- [x] OOPZ Researcher v2.0 — appeals body decision research
-- [x] AMKU Researcher (90%) — Anti-Monopoly Committee decision research
+- [x] TenderDoc Researcher v4.0 — tender documentation analysis (multi-lot, amendments chain)
+- [x] Bid Researcher v3.4 — participant bid analysis
+- [x] OOPZ Researcher v2.0 — appeals body decision research (writes to knowledge table)
+- [x] AMKU Researcher — core pipeline repaired, knowledge base builder in development
 - [x] ProZorro API integration
 - [x] Legislation database (286,634 documents, auto-updated)
-- [ ] Frontend / User dashboard
-- [ ] Tender documentation generator agent
+- [x] investigation — architecture v2 designed (code not started) → [description](investigation.md)
+- [x] complaint_researcher — designed (PPOU complaint review support) → [description](complaint_researcher.md)
+- [x] td_creator — TD constructor for buyers, designed July 2026 → [description](td_creator.md)
+- [x] bid_creator — participant package generator, designed July 2026 → [description](bid_creator.md)
+- [x] Platform architecture (frontend + backend) — designed July 2026, implementation pending → [description](platform.md)
+- [ ] Frontend / User dashboard — implementation
 - [ ] YouControl API integration
-- [ ] PPOU assistant agent (complaint review support)
 - [ ] Expansion to Polish market
 - [ ] Vector database for semantic search
 

@@ -264,6 +264,37 @@ def _build_prompt(
         f"Дедлайн подачі: {tender_info.get('submission_deadline', '—')}"
     )
 
+    # 5а. Лот-контекст (К4 аудиту — мультилотові закупівлі, CLAUDE.md
+    # «Правило щодо лотів — ФІНАЛЬНО»: кожен лот аналізується ОКРЕМО, бо
+    # технічні завдання різні). Присутній лише коли main.py розгалужується
+    # по активних лотах; для однолотових закупівель tender_info['lot_context']
+    # відсутній і цей блок НЕ додається — промпт ідентичний старому.
+    lot_context = tender_info.get('lot_context')
+    if lot_context:
+        lot_value = lot_context.get('value')
+        lot_value_str = (
+            f"{lot_value:,.2f}".replace(',', ' ')
+            if isinstance(lot_value, (int, float))
+            else str(lot_value or '—')
+        )
+        lot_items_lines = "\n".join(
+            f"  - {it.get('description', '—')} "
+            f"(кількість: {it.get('quantity', '—')} {it.get('unit', '')}, "
+            f"код ДК: {it.get('classification_id', '—')})"
+            for it in (lot_context.get('items') or [])
+        ) or "  (позиції не визначені окремо для лоту)"
+        parts.append(
+            f"## ЛОТ {lot_context.get('index', '—')}: {lot_context.get('title', '—')}\n"
+            f"Lot ID: {lot_context.get('id', '—')}\n"
+            f"Вартість лоту: {lot_value_str} грн\n"
+            f"Позиції цього лоту:\n{lot_items_lines}\n\n"
+            f"⚠️ АНАЛІЗУЙ ВИМОГИ ТД ЩОДО ЦЬОГО КОНКРЕТНОГО ЛОТУ. Спільні (загальні) "
+            f"розділи тендерної документації застосовуй до цього лоту як до всіх "
+            f"інших лотів закупівлі. Технічні вимоги, специфічні документи та "
+            f"кваліфікаційні критерії аналізуй лише в контексті позицій цього лоту — "
+            f"не змішуй з вимогами інших лотів цієї ж закупівлі."
+        )
+
     # 6. Повний текст ТД (без обрізки — Gemini 1M ctx, Claude Opus 200K ctx)
     parts.append(f"## ТЕКСТ ТЕНДЕРНОЇ ДОКУМЕНТАЦІЇ\n{td_text_combined}")
 
@@ -360,6 +391,7 @@ def _build_error_result(tender_info: dict, error_msg: str, start_time: float) ->
     Повертає мінімальний словник з позначкою помилки.
     Не пропагує виключення.
     """
+    _lot_context = tender_info.get('lot_context') or {}
     return {
         'public_id': tender_info.get('public_id'),
         'internal_id': tender_info.get('internal_id'),
@@ -369,11 +401,15 @@ def _build_error_result(tender_info: dict, error_msg: str, start_time: float) ->
         'customer_edrpou': tender_info.get('customer_edrpou'),
         'expected_value': tender_info.get('expected_value'),
         'submission_deadline': tender_info.get('submission_deadline'),
+        'lot_id': _lot_context.get('id'),
+        'lot_title': _lot_context.get('title'),
+        'lot_value': _lot_context.get('value'),
         'verdict': None,
         'risk_level': None,
         'participate': None,
         'appeal_possible': None,
         'appeal_deadline': None,
+        'appeal_deadline_source': None,
         'short_summary': None,
         'law_violations': [],
         'hidden_requirements': [],
@@ -566,8 +602,34 @@ def analyze(
     analysis_data = {**data_b, 'document_blocks': data_a.get('document_blocks') or []}
 
     # ── Розрахунок appeal_deadline ────────────────────────────────────────────
-    # Пріоритет: з qa_analysis; fallback: None
-    appeal_deadline = qa_analysis.get('appeal_deadline_original') if qa_analysis else None
+    # КМУ 1178-2022-п:
+    #   - є зміни ТД (td_has_amendments) і порахований новий дедлайн (п.59 абз.5,
+    #     5 днів з публікації змін, але ≥3 дні до нового дедлайну подання) →
+    #     він пріоритетний, бо це дедлайн для ОСТАННЬОЇ хвилі оскарження
+    #   - інакше — первинний дедлайн з qa_analyzer (п.59: дедлайн подання − 3 дні)
+    #   - якщо qa_analysis порожній/без даних (qa_analyzer впав чи пропущений
+    #     крок 7) — fallback: рахуємо первинний дедлайн напряму із
+    #     submission_deadline, щоб appeal_deadline НІКОЛИ не губився мовчки
+    _qa = qa_analysis or {}
+    new_deadline = _qa.get('new_appeal_deadline')
+    original_deadline = _qa.get('appeal_deadline_original')
+
+    if _qa.get('td_has_amendments') and new_deadline:
+        appeal_deadline = new_deadline
+        appeal_deadline_source = 'п.59 абз.5 КМУ 1178 (після змін ТД)'
+    elif original_deadline:
+        appeal_deadline = original_deadline
+        appeal_deadline_source = 'п.59 КМУ 1178 (первинний)'
+    else:
+        # Fallback: qa_analysis порожній/помилковий — рахуємо напряму,
+        # щоб не втратити юридично критичний дедлайн (аудит К3, середнє).
+        from .qa_analyzer import calculate_appeal_deadline as _calc_fallback_deadline
+        fallback_deadline = _calc_fallback_deadline(tender_info.get('submission_deadline', ''))
+        appeal_deadline = fallback_deadline
+        appeal_deadline_source = (
+            'п.59 КМУ 1178 (первинний, fallback — qa_analysis недоступний)'
+            if fallback_deadline else None
+        )
 
     # ── oopz_context_used ─────────────────────────────────────────────────────
     oopz_context_used = [
@@ -582,6 +644,8 @@ def analyze(
     # OUTPUT_FORMAT: verdict/risk_level/participate знаходяться в risk_summary
     risk_summary = analysis_data.get('risk_summary') or {}
 
+    _lot_context = tender_info.get('lot_context') or {}
+
     result: dict = {
         # Ідентифікаційні поля з tender_info
         'public_id': tender_info.get('public_id'),
@@ -592,6 +656,11 @@ def analyze(
         'customer_edrpou': tender_info.get('customer_edrpou'),
         'expected_value': tender_info.get('expected_value'),
         'submission_deadline': tender_info.get('submission_deadline'),
+        # Лот-метадані (К4 аудиту) — присутні лише для мультилотового аналізу,
+        # None для однолотових закупівель (сумісність зі старим форматом).
+        'lot_id': _lot_context.get('id'),
+        'lot_title': _lot_context.get('title'),
+        'lot_value': _lot_context.get('value'),
 
         # Поля з відповіді LLM — verdict/risk в risk_summary, інше на верхньому рівні
         'verdict': risk_summary.get('verdict'),
@@ -599,6 +668,7 @@ def analyze(
         'participate': risk_summary.get('participate'),
         'appeal_possible': bool(analysis_data.get('appeal_grounds')),
         'appeal_deadline': appeal_deadline,
+        'appeal_deadline_source': appeal_deadline_source,
         'short_summary': analysis_data.get('short_summary'),
         'law_violations': analysis_data.get('law_violations') or [],
         'hidden_requirements': analysis_data.get('hidden_requirements') or [],

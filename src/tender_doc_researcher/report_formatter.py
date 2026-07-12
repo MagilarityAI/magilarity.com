@@ -360,27 +360,406 @@ def _build_analysis_report(analysis: dict, contract_analysis: Optional[dict]) ->
     guarantee = analysis.get('guarantee_requirements') or {}
     _add_heading(doc, '5. ВИМОГИ ДО ТЕНДЕРНОГО ЗАБЕЗПЕЧЕННЯ', level=2)
 
+    # Канон полів — prompts/base_prompt.py OUTPUT_FORMAT.guarantee_requirements
+    # (15 ключів: proposal_* — забезпечення пропозиції, performance_* — забезпечення
+    # виконання договору). Ключі яких немає у мапі → human-readable fallback
+    # (підкреслення → пробіли, перша літера велика).
+    _GUARANTEE_LABEL_MAP = {
+        'proposal_required': 'Забезпечення пропозиції вимагається:',
+        'proposal_amount': 'Сума забезпечення пропозиції:',
+        'proposal_percent_of_value': 'Відсоток від вартості (пропозиція):',
+        'proposal_type': 'Тип забезпечення пропозиції:',
+        'proposal_cash_coverage_required': 'Вимагається грошове покриття (пропозиція):',
+        'proposal_non_standard': 'Нестандартна вимога (пропозиція):',
+        'proposal_issues': 'Проблемні моменти (пропозиція):',
+        'proposal_assessment': 'Оцінка забезпечення пропозиції:',
+        'performance_required': 'Забезпечення виконання договору вимагається:',
+        'performance_percent': 'Відсоток від вартості (виконання):',
+        'performance_type': 'Тип забезпечення виконання:',
+        'performance_non_standard': 'Нестандартна вимога (виконання):',
+        'performance_issues': 'Проблемні моменти (виконання):',
+        'performance_assessment': 'Оцінка забезпечення виконання:',
+        'overall_assessment': 'Загальна оцінка:',
+        # Старі/спрощені ключі (fallback для legacy analysis.json)
+        'required': 'Вимагається:',
+        'amount': 'Сума:',
+        'type': 'Тип:',
+        'notes': 'Примітки:',
+        'percent': 'Відсоток:',
+    }
+
+    def _guarantee_label(key: str) -> str:
+        if key in _GUARANTEE_LABEL_MAP:
+            return _GUARANTEE_LABEL_MAP[key]
+        return key.replace('_', ' ').capitalize() + ':'
+
+    def _guarantee_value(value) -> str:
+        if value is None:
+            return '—'
+        if isinstance(value, bool):
+            return 'Так' if value else 'Ні'
+        if isinstance(value, list):
+            return '; '.join(str(v) for v in value) if value else '—'
+        return str(value)
+
     if guarantee:
         g_table = doc.add_table(rows=len(guarantee), cols=2)
         g_table.style = 'Table Grid'
 
-        label_map = {
-            'required': 'Вимагається:',
-            'amount': 'Сума:',
-            'type': 'Тип:',
-            'notes': 'Примітки:',
-            'percent': 'Відсоток:',
-        }
-
         for i, (key, value) in enumerate(guarantee.items()):
             cells = g_table.rows[i].cells
-            cells[0].text = label_map.get(key, key)
-            cells[1].text = str(value)
+            cells[0].text = _guarantee_label(key)
+            cells[1].text = _guarantee_value(value)
             cells[0].paragraphs[0].runs[0].bold = True
     else:
         doc.add_paragraph('Вимоги до тендерного забезпечення не зазначені.')
 
     doc.add_paragraph()
+
+    # ── Розділ 5а: Обмеження конкуренції ─────────────────────────────────────
+    competition_limits = analysis.get('competition_limits') or []
+    if competition_limits:
+        _add_heading(doc, f'5а. ОБМЕЖЕННЯ КОНКУРЕНЦІЇ ({len(competition_limits)} шт.)', level=2)
+
+        cl_table = doc.add_table(rows=1 + len(competition_limits), cols=4)
+        cl_table.style = 'Table Grid'
+
+        cl_headers = ['Тип', 'Опис', 'Цитата з ТД', 'Ступінь']
+        for j, h in enumerate(cl_headers):
+            cell = cl_table.rows[0].cells[j]
+            cell.text = h
+            cell.paragraphs[0].runs[0].bold = True
+            _set_cell_bg(cell, 'FCE4D6')
+
+        for i, item in enumerate(competition_limits):
+            row = cl_table.rows[i + 1]
+            row.cells[0].text = str(item.get('type', '—'))
+            row.cells[1].text = str(item.get('description', '—'))
+            row.cells[2].text = str(item.get('td_quote', '—'))
+            severity = item.get('severity', '—')
+            row.cells[3].text = severity
+            if severity in ('high',):
+                for run in row.cells[3].paragraphs[0].runs:
+                    run.font.color.rgb = COLOR_RED
+
+        doc.add_paragraph()
+
+    # ── Розділ 5б: Надмірні вимоги ────────────────────────────────────────────
+    excessive_requirements = analysis.get('excessive_requirements') or []
+    if excessive_requirements:
+        _add_heading(doc, f'5б. НАДМІРНІ ВИМОГИ ({len(excessive_requirements)} шт.)', level=2)
+
+        er_table = doc.add_table(rows=1 + len(excessive_requirements), cols=4)
+        er_table.style = 'Table Grid'
+
+        er_headers = ['Тип', 'Опис', 'Цитата з ТД', 'Ступінь']
+        for j, h in enumerate(er_headers):
+            cell = er_table.rows[0].cells[j]
+            cell.text = h
+            cell.paragraphs[0].runs[0].bold = True
+            _set_cell_bg(cell, 'FFF2CC')
+
+        for i, item in enumerate(excessive_requirements):
+            row = er_table.rows[i + 1]
+            row.cells[0].text = str(item.get('type', '—'))
+            row.cells[1].text = str(item.get('description', '—'))
+            row.cells[2].text = str(item.get('td_quote', '—'))
+            severity = item.get('severity', '—')
+            row.cells[3].text = severity
+            if severity in ('high',):
+                for run in row.cells[3].paragraphs[0].runs:
+                    run.font.color.rgb = COLOR_RED
+
+        doc.add_paragraph()
+
+    # ── Розділ 5в: Неправомірні вимоги ────────────────────────────────────────
+    unlawful_requirements = analysis.get('unlawful_requirements') or []
+    if unlawful_requirements:
+        _add_heading(doc, f'5в. НЕПРАВОМІРНІ ВИМОГИ ({len(unlawful_requirements)} шт.)', level=2)
+
+        ur_table = doc.add_table(rows=1 + len(unlawful_requirements), cols=4)
+        ur_table.style = 'Table Grid'
+
+        ur_headers = ['Тип', 'Опис', 'Цитата з ТД', 'Стаття закону']
+        for j, h in enumerate(ur_headers):
+            cell = ur_table.rows[0].cells[j]
+            cell.text = h
+            cell.paragraphs[0].runs[0].bold = True
+            _set_cell_bg(cell, 'FCE4D6')
+
+        for i, item in enumerate(unlawful_requirements):
+            row = ur_table.rows[i + 1]
+            row.cells[0].text = str(item.get('type', '—'))
+            row.cells[1].text = str(item.get('description', '—'))
+            row.cells[2].text = str(item.get('td_quote', '—'))
+            row.cells[3].text = str(item.get('law_article', '—'))
+
+        doc.add_paragraph()
+
+    # ── Розділ 5г: Ознаки заточеності під учасника ────────────────────────────
+    tailoring = analysis.get('tailoring_indicators') or {}
+    if tailoring and tailoring.get('detected'):
+        _add_heading(doc, '5г. ОЗНАКИ МОЖЛИВОЇ ЗАТОЧЕНОСТІ ПІД УЧАСНИКА', level=2)
+
+        p = doc.add_paragraph()
+        run = p.add_run(f"Виявлено (впевненість: {tailoring.get('confidence', '—')})")
+        run.bold = True
+        run.font.color.rgb = COLOR_ORANGE
+
+        indicators = tailoring.get('indicators') or []
+        if indicators:
+            ti_table = doc.add_table(rows=1 + len(indicators), cols=3)
+            ti_table.style = 'Table Grid'
+
+            ti_headers = ['Тип ознаки', 'Опис', 'Цитата з ТД']
+            for j, h in enumerate(ti_headers):
+                cell = ti_table.rows[0].cells[j]
+                cell.text = h
+                cell.paragraphs[0].runs[0].bold = True
+                _set_cell_bg(cell, 'FFF2CC')
+
+            for i, ind in enumerate(indicators):
+                row = ti_table.rows[i + 1]
+                row.cells[0].text = str(ind.get('type', '—'))
+                row.cells[1].text = str(ind.get('description', '—'))
+                row.cells[2].text = str(ind.get('td_quote', '—') or '—')
+
+        summary = tailoring.get('summary')
+        if summary:
+            doc.add_paragraph()
+            p = doc.add_paragraph()
+            run = p.add_run('Висновок: ')
+            run.bold = True
+            p.add_run(summary)
+
+        if tailoring.get('deep_analysis_recommended'):
+            p = doc.add_paragraph()
+            run = p.add_run(
+                '⚠️ Рекомендується поглиблений аналіз заточеності за окремим запитом.'
+            )
+            run.bold = True
+            run.font.color.rgb = COLOR_RED
+
+        doc.add_paragraph()
+
+    # ── Розділ 5д: Критерії оцінювання ────────────────────────────────────────
+    evaluation_criteria = analysis.get('evaluation_criteria') or {}
+    if evaluation_criteria:
+        _add_heading(doc, '5д. КРИТЕРІЇ ОЦІНЮВАННЯ', level=2)
+
+        ec_table = doc.add_table(rows=2, cols=2)
+        ec_table.style = 'Table Grid'
+        ec_rows = [
+            ('Вага ціни (%):', str(evaluation_criteria.get('price_weight_percent', '—'))),
+            (
+                'Відповідність вимогам щодо ваги ціни:',
+                'Так' if evaluation_criteria.get('price_weight_compliant') else 'Ні',
+            ),
+        ]
+        for i, (label, value) in enumerate(ec_rows):
+            cells = ec_table.rows[i].cells
+            cells[0].text = label
+            cells[1].text = value
+            cells[0].paragraphs[0].runs[0].bold = True
+
+        non_price = evaluation_criteria.get('non_price_criteria') or []
+        if non_price:
+            doc.add_paragraph()
+            _add_heading(doc, 'Нецінові критерії:', level=3)
+            np_table = doc.add_table(rows=1 + len(non_price), cols=3)
+            np_table.style = 'Table Grid'
+            np_headers = ['Назва критерію', 'Вага (%)', 'Об\'єктивний']
+            for j, h in enumerate(np_headers):
+                cell = np_table.rows[0].cells[j]
+                cell.text = h
+                cell.paragraphs[0].runs[0].bold = True
+                _set_cell_bg(cell, 'D9E1F2')
+            for i, crit in enumerate(non_price):
+                row = np_table.rows[i + 1]
+                row.cells[0].text = str(crit.get('name', '—'))
+                row.cells[1].text = str(crit.get('weight_percent', '—'))
+                row.cells[2].text = 'Так' if crit.get('is_objective') else 'Ні'
+
+        issues = evaluation_criteria.get('issues') or []
+        if issues:
+            doc.add_paragraph()
+            _add_heading(doc, '⚠️ Проблемні моменти:', level=3)
+            for issue in issues:
+                p = doc.add_paragraph(style='List Bullet')
+                p.add_run(str(issue))
+
+        doc.add_paragraph()
+
+    # ── Розділ 5е: Відповідність коду ДК ──────────────────────────────────────
+    dk_compliance = analysis.get('dk_compliance') or {}
+    if dk_compliance:
+        _add_heading(doc, '5е. ВІДПОВІДНІСТЬ КОДУ ДК ЗМІСТУ ТД', level=2)
+
+        dk_table = doc.add_table(rows=4, cols=2)
+        dk_table.style = 'Table Grid'
+        dk_rows = [
+            ('Заявлений код ДК:', str(dk_compliance.get('declared_dk_code', '—'))),
+            ('Назва за ДК:', str(dk_compliance.get('dk_name', '—'))),
+            (
+                'Предмет закупівлі відповідає ДК:',
+                'Так' if dk_compliance.get('actual_subject_matches_dk') else 'Ні',
+            ),
+            (
+                'Підозра на уникнення процедур:',
+                'Так' if dk_compliance.get('avoidance_suspicion') else 'Ні',
+            ),
+        ]
+        for i, (label, value) in enumerate(dk_rows):
+            cells = dk_table.rows[i].cells
+            cells[0].text = label
+            cells[1].text = value
+            cells[0].paragraphs[0].runs[0].bold = True
+            if label == 'Підозра на уникнення процедур:' and dk_compliance.get('avoidance_suspicion'):
+                for run in cells[1].paragraphs[0].runs:
+                    run.font.color.rgb = COLOR_RED
+
+        notes = dk_compliance.get('notes')
+        if notes:
+            doc.add_paragraph()
+            p = doc.add_paragraph()
+            run = p.add_run('Примітка: ')
+            run.bold = True
+            p.add_run(str(notes))
+
+        doc.add_paragraph()
+
+    # ── Розділ 5є: Вимоги локалізації (КМУ №782) ──────────────────────────────
+    localization = analysis.get('localization') or {}
+    if localization and (
+        localization.get('requirement_present_in_td') or localization.get('should_be_present')
+    ):
+        _add_heading(doc, '5є. ВИМОГИ ЛОКАЛІЗАЦІЇ (КМУ №782)', level=2)
+
+        loc_table = doc.add_table(rows=3, cols=2)
+        loc_table.style = 'Table Grid'
+        loc_rows = [
+            (
+                'Вимога присутня у ТД:',
+                'Так' if localization.get('requirement_present_in_td') else 'Ні',
+            ),
+            (
+                'Має бути присутня (вартість > 200 тис. грн):',
+                'Так' if localization.get('should_be_present') else 'Ні',
+            ),
+            (
+                'Необхідний ступінь локалізації (%):',
+                str(localization.get('localization_degree_required_percent', '—')),
+            ),
+        ]
+        for i, (label, value) in enumerate(loc_rows):
+            cells = loc_table.rows[i].cells
+            cells[0].text = label
+            cells[1].text = value
+            cells[0].paragraphs[0].runs[0].bold = True
+
+        violations = localization.get('violations') or []
+        if violations:
+            doc.add_paragraph()
+            _add_heading(doc, '⚠️ Порушення:', level=3)
+            for v in violations:
+                p = doc.add_paragraph(style='List Bullet')
+                p.add_run(str(v))
+
+        notes = localization.get('notes')
+        if notes:
+            doc.add_paragraph()
+            p = doc.add_paragraph()
+            run = p.add_run('Примітка: ')
+            run.bold = True
+            p.add_run(str(notes))
+
+        doc.add_paragraph()
+
+    # ── Розділ 5ж: Технічні вимоги ────────────────────────────────────────────
+    technical_requirements = analysis.get('technical_requirements') or {}
+    if technical_requirements:
+        _add_heading(doc, '5ж. АНАЛІЗ ТЕХНІЧНИХ ВИМОГ', level=2)
+
+        p = doc.add_paragraph()
+        run = p.add_run(
+            'Прив\'язка до конкретного бренду без еквіваленту: '
+            + ('Так' if technical_requirements.get('brand_specific_without_equivalent') else 'Ні')
+        )
+        run.bold = technical_requirements.get('brand_specific_without_equivalent', False)
+        if technical_requirements.get('brand_specific_without_equivalent'):
+            run.font.color.rgb = COLOR_RED
+
+        overly_specific = technical_requirements.get('overly_specific_parameters') or []
+        if overly_specific:
+            doc.add_paragraph()
+            os_table = doc.add_table(rows=1 + len(overly_specific), cols=3)
+            os_table.style = 'Table Grid'
+            os_headers = ['Параметр', 'Цитата з ТД', 'Обмежує до']
+            for j, h in enumerate(os_headers):
+                cell = os_table.rows[0].cells[j]
+                cell.text = h
+                cell.paragraphs[0].runs[0].bold = True
+                _set_cell_bg(cell, 'FFF2CC')
+            for i, param in enumerate(overly_specific):
+                row = os_table.rows[i + 1]
+                row.cells[0].text = str(param.get('parameter', '—'))
+                row.cells[1].text = str(param.get('td_quote', '—'))
+                row.cells[2].text = str(param.get('restricts_to', '—'))
+
+        issues = technical_requirements.get('issues') or []
+        if issues:
+            doc.add_paragraph()
+            _add_heading(doc, '⚠️ Проблемні моменти:', level=3)
+            for issue in issues:
+                p = doc.add_paragraph(style='List Bullet')
+                p.add_run(str(issue))
+
+        assessment = technical_requirements.get('assessment')
+        if assessment:
+            doc.add_paragraph()
+            p = doc.add_paragraph()
+            run = p.add_run('Загальна оцінка: ')
+            run.bold = True
+            p.add_run(str(assessment))
+
+        doc.add_paragraph()
+
+    # ── Розділ 5з: Підстави для відхилення пропозиції ─────────────────────────
+    rejection_grounds = analysis.get('rejection_grounds') or []
+    if rejection_grounds:
+        _add_heading(doc, f'5з. ПІДСТАВИ ДЛЯ ВІДХИЛЕННЯ ПРОПОЗИЦІЇ ({len(rejection_grounds)} шт.)', level=2)
+
+        rg_table = doc.add_table(rows=1 + len(rejection_grounds), cols=4)
+        rg_table.style = 'Table Grid'
+
+        rg_headers = ['Підстава', 'Де у ТД', 'Цитата з ТД', 'Рівень ризику']
+        for j, h in enumerate(rg_headers):
+            cell = rg_table.rows[0].cells[j]
+            cell.text = h
+            cell.paragraphs[0].runs[0].bold = True
+            _set_cell_bg(cell, 'FCE4D6')
+
+        _td_location_ua = {
+            'explicit_list': 'Явний перелік',
+            'hidden_in_text': 'Прихована у тексті',
+            'contract_conditions': 'Умови договору',
+            'technical_requirements': 'Технічні вимоги',
+            'annexes': 'Додатки',
+        }
+
+        for i, g in enumerate(rejection_grounds):
+            row = rg_table.rows[i + 1]
+            row.cells[0].text = str(g.get('ground', '—'))
+            location = g.get('td_location', '—')
+            row.cells[1].text = _td_location_ua.get(location, location)
+            row.cells[2].text = str(g.get('td_quote', '—'))
+            risk_level = g.get('risk_level', '—')
+            row.cells[3].text = risk_level
+            if risk_level in ('high', 'critical'):
+                for run in row.cells[3].paragraphs[0].runs:
+                    run.font.color.rgb = COLOR_RED
+
+        doc.add_paragraph()
 
     # ── Розділ 6: Q&A та зміни до ТД ─────────────────────────────────────────
     qa_analysis = analysis.get('qa_analysis') or {}
@@ -502,9 +881,6 @@ def _build_analysis_report(analysis: dict, contract_analysis: Optional[dict]) ->
     metadata = analysis.get('metadata') or {}
     _add_heading(doc, '9. МЕТАДАНІ АНАЛІЗУ', level=2)
 
-    meta_table = doc.add_table(rows=4, cols=2)
-    meta_table.style = 'Table Grid'
-
     meta_rows = [
         ('Модель аналізу:', metadata.get('model_analysis', '—')),
         ('Модель класифікації:', metadata.get('model_classification', '—')),
@@ -515,7 +891,7 @@ def _build_analysis_report(analysis: dict, contract_analysis: Optional[dict]) ->
     if oopz_used:
         meta_rows.append(('ООПЗ рішення використано:', ', '.join(oopz_used)))
 
-    # Перебудувати таблицю з правильною кількістю рядків
+    # Одна таблиця, з правильною кількістю рядків одразу
     meta_table = doc.add_table(rows=len(meta_rows), cols=2)
     meta_table.style = 'Table Grid'
     for i, (label, value) in enumerate(meta_rows):
@@ -756,7 +1132,14 @@ def _build_contract_analysis_doc(analysis: dict, contract_analysis: dict) -> Doc
             row.cells[0].text = str(i + 1)
             row.cells[1].text = str(g.get('ground', '—'))
             row.cells[2].text = str(g.get('legal_basis', g.get('law_basis', '—')))
-            row.cells[3].text = str(g.get('contract_clause', '—'))
+            # Канон — CONTRACT_OUTPUT_FORMAT: "clauses" (список). Fallback на старий
+            # одиничний "contract_clause" (analysis.json, збережені до цього фіксу).
+            clauses = g.get('clauses')
+            if clauses:
+                clause_text = ', '.join(str(c) for c in clauses) if isinstance(clauses, list) else str(clauses)
+            else:
+                clause_text = str(g.get('contract_clause', '—'))
+            row.cells[3].text = clause_text
             row.cells[4].text = str(g.get('suggested_claim', '—'))
     else:
         doc.add_paragraph('Підстав для оскарження умов договору не виявлено.')
@@ -780,15 +1163,45 @@ def _build_contract_analysis_doc(analysis: dict, contract_analysis: dict) -> Doc
 
         for i, v in enumerate(law_violations):
             row = lv_table.rows[i + 1]
-            row.cells[0].text = str(v.get('article', '—'))
-            row.cells[1].text = str(v.get('description', '—'))
-            row.cells[2].text = str(v.get('contract_clause', '—'))
-            severity = v.get('severity', '—')
-            row.cells[3].text = severity
-            if severity in ('high', 'critical'):
-                for run in row.cells[3].paragraphs[0].runs:
-                    run.font.color.rgb = COLOR_RED
-            row.cells[4].text = str(v.get('impact', ''))
+            # Канон полів — prompts/contract_analysis.py CONTRACT_OUTPUT_FORMAT:
+            # clause / description / quote / law_article / explanation / appeal_possible.
+            # Fallback на старі імена (article/contract_clause/severity/impact) —
+            # для analysis.json, збережених до цього фіксу.
+            article = v.get('law_article', v.get('article', '—'))
+            clause = v.get('clause', v.get('contract_clause', '—'))
+            description = v.get('description', '—')
+            quote = v.get('quote', '')
+            explanation = v.get('explanation', '')
+            appeal_possible = v.get('appeal_possible')
+
+            row.cells[0].text = str(article)
+            desc_parts = [str(description)]
+            if quote:
+                desc_parts.append(f'«{quote}»')
+            row.cells[1].text = '\n'.join(desc_parts)
+            row.cells[2].text = str(clause)
+
+            # Колонка "Ступінь" — severity якщо є (старий формат),
+            # інакше похідне значення з appeal_possible (новий формат не має severity).
+            severity = v.get('severity')
+            if severity:
+                row.cells[3].text = str(severity)
+                if severity in ('high', 'critical'):
+                    for run in row.cells[3].paragraphs[0].runs:
+                        run.font.color.rgb = COLOR_RED
+            else:
+                row.cells[3].text = '—'
+
+            # Колонка "Вплив" — impact (старий формат) або explanation (новий формат)
+            impact = v.get('impact')
+            if impact:
+                row.cells[4].text = str(impact)
+            elif explanation:
+                row.cells[4].text = str(explanation)
+            elif appeal_possible is not None:
+                row.cells[4].text = 'Можливе оскарження' if appeal_possible else 'Оскарження неможливе'
+            else:
+                row.cells[4].text = ''
     else:
         doc.add_paragraph('Прямих порушень законодавства не виявлено.')
 
@@ -811,9 +1224,32 @@ def _build_contract_analysis_doc(analysis: dict, contract_analysis: dict) -> Doc
 
         for i, c in enumerate(one_sided):
             row = os_table.rows[i + 1]
-            row.cells[0].text = str(c.get('condition', '—'))
-            row.cells[1].text = str(c.get('contract_clause', '—'))
-            row.cells[2].text = str(c.get('impact', '—'))
+            # Канон полів — CONTRACT_OUTPUT_FORMAT: clause / description / quote / risk / note.
+            # Fallback на старі імена (condition/contract_clause/impact).
+            clause = c.get('clause', c.get('contract_clause', '—'))
+            description = c.get('description', c.get('condition', '—'))
+            quote = c.get('quote', '')
+            risk = c.get('risk')
+            note = c.get('note', '')
+
+            cond_parts = [str(description)]
+            if quote:
+                cond_parts.append(f'«{quote}»')
+            row.cells[0].text = '\n'.join(cond_parts)
+            row.cells[1].text = str(clause)
+
+            impact_parts = []
+            if risk:
+                impact_parts.append(f'Ризик: {_risk_ua(risk)}')
+            fallback_impact = c.get('impact')
+            if note:
+                impact_parts.append(str(note))
+            elif fallback_impact:
+                impact_parts.append(str(fallback_impact))
+            row.cells[2].text = '\n'.join(impact_parts) if impact_parts else '—'
+            if risk in ('high', 'critical'):
+                for run in row.cells[2].paragraphs[0].runs:
+                    run.font.color.rgb = COLOR_RED
     else:
         doc.add_paragraph('Односторонніх умов не виявлено.')
 
@@ -836,9 +1272,19 @@ def _build_contract_analysis_doc(analysis: dict, contract_analysis: dict) -> Doc
 
         for i, r in enumerate(hidden_risks):
             row = hr_table.rows[i + 1]
-            row.cells[0].text = str(r.get('risk', '—'))
-            row.cells[1].text = str(r.get('contract_clause', '—'))
-            row.cells[2].text = str(r.get('financial_impact', '—'))
+            # Канон полів — CONTRACT_OUTPUT_FORMAT: clause / description / quote / note.
+            # Fallback на старі імена (risk/contract_clause/financial_impact).
+            clause = r.get('clause', r.get('contract_clause', '—'))
+            description = r.get('description', r.get('risk', '—'))
+            quote = r.get('quote', '')
+            note = r.get('note', r.get('financial_impact', ''))
+
+            risk_parts = [str(description)]
+            if quote:
+                risk_parts.append(f'«{quote}»')
+            row.cells[0].text = '\n'.join(risk_parts)
+            row.cells[1].text = str(clause)
+            row.cells[2].text = str(note) if note else '—'
     else:
         doc.add_paragraph('Прихованих ризиків не виявлено.')
 

@@ -14,7 +14,7 @@ docker-compose up --build
 
 ## 🗄️ Databases
 
-### APPDB (appdb) — Read-Only
+### APPDB (appdb) — Read-Only (one write exception)
 
 Legislative database for the Ukrainian jurisdiction.
 
@@ -27,7 +27,10 @@ Legislative database for the Ukrainian jurisdiction.
 | Law No. 922-VIII articles | Full text |
 | CMU Resolution No. 1178 | Full text |
 
-**54 tables.** Agents have read-only access. All legal cross-referencing and validation queries run against this database.
+**54 tables.** Agents have read-only access, with **one deliberate exception**: `oopz_researcher`
+writes to `oopz_decisions` (its own knowledge table, step 10.5 of its pipeline, added
+07.07.2026) — this is the single write path into APPDB granted to any agent. All other legal
+cross-referencing and validation queries run read-only against this database.
 
 **Auto-update:** daily synchronization with data.gov.ua API — new normative documents are downloaded automatically.
 
@@ -50,6 +53,7 @@ Agent coordination and results storage.
 | `learning_experiences` | Agent learning records |
 | `knowledge_base` | Accumulated system knowledge |
 | `agents_registry` | Active agents registry (8 agents) |
+| `amku_bid_rigging_knowledge` | AMCU bid-rigging evidence/reasoning knowledge base (added 07.07.2026, written by `amku_researcher`, read by `investigation`) |
 
 ---
 

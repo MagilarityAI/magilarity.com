@@ -251,7 +251,7 @@ def _run_pipeline(
             **download_result,
             'amendments_text': amendments_text,
             'amendments_file': amendments_file,
-            'amendments_date': None,
+            'amendments_date': download_result.get('amendments_date'),
         }
         qa_analysis = qa_analyzer.analyze(qa_input)
         logger.info(
@@ -272,37 +272,31 @@ def _run_pipeline(
             'key_clarifications': [],
         }
 
-    # ── Крок 8: Базовий аналіз (Opus) ────────────────────────────────────────────
-    logger.info("Step 8/11: Running base analysis (Opus)...")
-    step8_start = time.time()
-    try:
-        analysis = base_analyzer.analyze(
-            tender_info=tender_info,
-            td_texts=td_texts,
-            oopz_context=oopz_context,
-            qa_analysis=qa_analysis,
-            customer_profile=customer_profile,
-        )
-        logger.info(
-            "Base analysis done in %.1fs: verdict=%s  risk=%s  donors=%s",
-            time.time() - step8_start,
-            analysis.get('verdict'),
-            analysis.get('risk_level'),
-            analysis.get('donor_ids', []),
-        )
-    except Exception as e:
-        logger.error("Step 8 FAILED (base_analyzer): %s", e, exc_info=True)
-        return {
-            'status': 'error',
-            'public_id': public_id,
-            'internal_id': internal_id,
-            'error': f"Base analyzer failed: {e}",
-            'duration_sec': round(time.time() - start_time, 1),
-            'errors': errors + [f"base_analyzer: {e}"],
-        }
+    # ── Кроки 8-12: базовий аналіз → договір → звіти → реєстр → handoff ─────────
+    # Мультилотові закупівлі (К4 аудиту, CLAUDE.md «Правило щодо лотів —
+    # ФІНАЛЬНО»): кожен лот аналізується ОКРЕМО (ТЗ різні), окремий запис
+    # реєстру, окрема підпапка analysis/lot_N/. Однолотові закупівлі (переважний
+    # випадок) — потік НЕ ЗМІНЮЄТЬСЯ: та сама analysis/ без підпапок, той самий
+    # формат реєстру (виклик _analyze_one_lot нижче з lot_meta=None відтворює
+    # СТАРИЙ код 1:1, лише винесений у функцію).
+    lots_raw = download_result.get('lots') or []
+    items_raw = download_result.get('items') or []
+    active_lots = [lot for lot in lots_raw if lot.get('status', 'active') == 'active']
+    cancelled_lots = [lot for lot in lots_raw if lot.get('status', 'active') != 'active']
 
-    # ── Крок 9: Аналіз договору (Opus) ───────────────────────────────────────────
-    logger.info("Step 9/11: Analyzing contract...")
+    for lot in cancelled_lots:
+        logger.info(
+            "Лот %s (%s) статус=%s — пропущено (не активний)",
+            lot.get('id'), lot.get('title', '—'), lot.get('status'),
+        )
+
+    is_multilot = tender_info.get('has_lots') and len(active_lots) > 1
+
+    # Аналіз договору (contract_analyzer) — ОДИН раз на закупівлю незалежно від
+    # кількості лотів (договір зазвичай спільний або по-лотовий буде окремим
+    # backlog-завданням — див. звіт субагента). Результат передається в кожен
+    # lot-аналіз з позначкою scope='procurement'.
+    logger.info("Step 9/11: Analyzing contract (once per procurement)...")
     step9_start = time.time()
     try:
         contract_analysis = contract_analyzer.analyze(
@@ -311,6 +305,7 @@ def _run_pipeline(
             qa_analysis=qa_analysis,
         )
         if contract_analysis:
+            contract_analysis['scope'] = 'procurement'
             logger.info(
                 "Contract analysis done in %.1fs: balance=%s  risk=%s",
                 time.time() - step9_start,
@@ -324,32 +319,286 @@ def _run_pipeline(
         errors.append(f"contract_analyzer: {e}")
         contract_analysis = None
 
+    base_analysis_dir = tender_dir / 'analysis'
+
+    if not is_multilot:
+        # ── Однолотова закупівля (або без лотів) — старий потік без змін ───────
+        try:
+            lot_result = _analyze_one_lot(
+                internal_id=internal_id,
+                public_id=public_id,
+                tender_info=tender_info,
+                td_texts=td_texts,
+                oopz_context=oopz_context,
+                customer_profile=customer_profile,
+                qa_analysis=qa_analysis,
+                contract_analysis=contract_analysis,
+                docs_dir=docs_dir,
+                tender_dir=tender_dir,
+                output_dir=base_analysis_dir,
+                lot_meta=None,
+                errors=errors,
+            )
+        except Exception as e:
+            # base_analyzer — критичний крок (як і в старому коді): при падінні
+            # pipeline зупиняється з status=error, а не продовжує з порожнім
+            # аналізом (поведінка ідентична дореструктуризаційній).
+            logger.error("Step 8 FAILED (base_analyzer): %s", e, exc_info=True)
+            return {
+                'status': 'error',
+                'public_id': public_id,
+                'internal_id': internal_id,
+                'error': f"Base analyzer failed: {e}",
+                'duration_sec': round(time.time() - start_time, 1),
+                'errors': errors + [f"base_analyzer: {e}"],
+            }
+        duration = round(time.time() - start_time, 1)
+        return {
+            'status': 'completed',
+            'public_id': public_id,
+            'internal_id': internal_id,
+            'category': tender_info.get('category'),
+            'verdict': lot_result['analysis'].get('verdict'),
+            'risk_level': lot_result['analysis'].get('risk_level'),
+            'participate': lot_result['analysis'].get('participate'),
+            'appeal_deadline': lot_result['analysis'].get('appeal_deadline'),
+            'short_summary': lot_result['analysis'].get('short_summary'),
+            'output_dir': str(base_analysis_dir),
+            'reports': lot_result['files'],
+            'duration_sec': duration,
+            'errors': errors,
+        }
+
+    # ── Мультилотова закупівля — цикл по активних лотах ─────────────────────────
+    logger.warning(
+        "Мультилотова закупівля: %d активних лотів (%d скасовано) — "
+        "буде виконано ПРИБЛИЗНО %d окремих викликів base_analyzer "
+        "(бюджет LLM зростає лінійно з кількістю лотів)",
+        len(active_lots), len(cancelled_lots), len(active_lots),
+    )
+
+    lot_reports_by_lot: dict[str, dict] = {}
+
+    for idx, lot in enumerate(active_lots, start=1):
+        lot_id = lot.get('id', '')
+        lot_title = lot.get('title', f'Лот {idx}')
+        lot_suffix = f'lot{idx}'          # суфікс реєстру: 'UA-...:lot1'
+        lot_dirname = f'lot_{idx}'        # підпапка виводу: analysis/lot_1/ (CLAUDE.md)
+        logger.info(
+            "=== Лот %d/%d: %s (id=%s) ===",
+            idx, len(active_lots), lot_title, lot_id,
+        )
+
+        lot_context = _build_lot_context(lot, idx, items_raw)
+        lot_tender_info = {**tender_info, 'lot_context': lot_context}
+        lot_td_texts = _filter_td_texts_for_lot(td_texts, download_result, lot_id)
+        lot_output_dir = base_analysis_dir / lot_dirname
+
+        try:
+            lot_result = _analyze_one_lot(
+                internal_id=internal_id,
+                public_id=public_id,
+                tender_info=lot_tender_info,
+                td_texts=lot_td_texts,
+                oopz_context=oopz_context,
+                customer_profile=customer_profile,
+                qa_analysis=qa_analysis,
+                contract_analysis=contract_analysis,
+                docs_dir=docs_dir,
+                tender_dir=tender_dir,
+                output_dir=lot_output_dir,
+                lot_meta={'suffix': lot_suffix, 'id': lot_id, 'title': lot_title},
+                errors=errors,
+            )
+            lot_reports_by_lot[lot_suffix] = {
+                'lot_id': lot_id,
+                'lot_title': lot_title,
+                'verdict': lot_result['analysis'].get('verdict'),
+                'risk_level': lot_result['analysis'].get('risk_level'),
+                'output_dir': str(lot_output_dir),
+                'reports': lot_result['files'],
+            }
+        except Exception as e:
+            logger.error("Лот %s FAILED: %s", lot_suffix, e, exc_info=True)
+            errors.append(f"lot_{lot_suffix}: {e}")
+            lot_reports_by_lot[lot_suffix] = {
+                'lot_id': lot_id,
+                'lot_title': lot_title,
+                'error': str(e),
+            }
+
+    duration = round(time.time() - start_time, 1)
+    return {
+        'status': 'completed',
+        'public_id': public_id,
+        'internal_id': internal_id,
+        'category': tender_info.get('category'),
+        'is_multilot': True,
+        'lots_total': len(lots_raw),
+        'lots_analyzed': len(active_lots),
+        'lots_skipped_cancelled': len(cancelled_lots),
+        'lots': lot_reports_by_lot,
+        'output_dir': str(base_analysis_dir),
+        'duration_sec': duration,
+        'errors': errors,
+    }
+
+
+def _build_lot_context(lot: dict, index: int, items_raw: list[dict]) -> dict:
+    """
+    Будує lot_context для промпту base_analyzer з сирого lots[]/items[] Prozorro.
+
+    Args:
+        lot:       Один запис з lots[] (id, title, value, status тощо).
+        index:     Порядковий номер лоту (для нумерації в промпті/шляхах, з 1).
+        items_raw: Повний items[] закупівлі — фільтрується по relatedLot == lot.id.
+
+    Returns:
+        dict: id, title, value, index, items (список тільки для цього лоту).
+    """
+    lot_id = lot.get('id', '')
+    lot_items = [it for it in items_raw if it.get('relatedLot') == lot_id]
+    return {
+        'id': lot_id,
+        'title': lot.get('title', f'Лот {index}'),
+        'value': (lot.get('value') or {}).get('amount'),
+        'index': index,
+        'items': [
+            {
+                'description': it.get('description', ''),
+                'quantity': it.get('quantity'),
+                'unit': (it.get('unit') or {}).get('name', ''),
+                'classification_id': (it.get('classification') or {}).get('id', ''),
+            }
+            for it in lot_items
+        ],
+    }
+
+
+def _filter_td_texts_for_lot(
+    td_texts: dict,
+    download_result: dict,
+    lot_id: str,
+) -> dict:
+    """
+    Фільтрує td_texts для конкретного лоту: документи цього лоту (relatedLot ==
+    lot_id) + СПІЛЬНІ документи закупівлі (relatedLot відсутній/None — типово
+    основна ТД). Документи ІНШИХ лотів виключаються.
+
+    Args:
+        td_texts:        Повний результат file_extractor.extract_all_documents()
+                          — {filename: {'text': str, 'is_amendment': bool, ...}}.
+        download_result: Результат downloader.download_tender() — містить
+                          downloaded_files[] з полем related_lot per файл.
+        lot_id:           id лоту з lots[].
+
+    Returns:
+        Підмножина td_texts: спільні документи + документи цього лоту.
+    """
+    downloaded_files = download_result.get('downloaded_files') or []
+    # local_path → related_lot (з downloader.py)
+    related_lot_by_path: dict[str, object] = {
+        Path(f['local_path']).name: f.get('related_lot')
+        for f in downloaded_files
+        if f.get('local_path')
+    }
+
+    filtered = {}
+    for fname, info in td_texts.items():
+        related_lot = related_lot_by_path.get(fname)
+        if related_lot is None or related_lot == lot_id:
+            filtered[fname] = info
+    return filtered
+
+
+def _analyze_one_lot(
+    internal_id: str,
+    public_id: str,
+    tender_info: dict,
+    td_texts: dict,
+    oopz_context: list,
+    customer_profile: dict,
+    qa_analysis: dict,
+    contract_analysis: Optional[dict],
+    docs_dir: Path,
+    tender_dir: Path,
+    output_dir: Path,
+    lot_meta: Optional[dict],
+    errors: list[str],
+) -> dict:
+    """
+    Виконує кроки 8, 10, 11, 12 pipeline (базовий аналіз → звіти → реєстр →
+    handoff) для ОДНІЄЇ закупівлі АБО одного лоту мультилотової закупівлі.
+
+    Крок 9 (contract_analyzer) виконується у виклика ОДИН раз на закупівлю —
+    сюди передається вже готовий contract_analysis.
+
+    Args:
+        tender_info: Для однолотової закупівлі — оригінальний tender_info.
+                     Для лоту — tender_info + ключ 'lot_context' (див.
+                     _build_lot_context) що інжектиться у промпт base_analyzer.
+        td_texts:    Для лоту — вже відфільтровані _filter_td_texts_for_lot.
+        output_dir:  analysis/ (однолотова) або analysis/lot_N/ (лот).
+        lot_meta:    None для однолотової закупівлі; {'suffix','id','title'}
+                     для лоту — використовується для реєстру.
+
+    Returns:
+        {'analysis': dict, 'files': dict} — результат base_analyzer.analyze()
+        та шляхи до згенерованих звітів.
+
+    Raises:
+        Exception: якщо base_analyzer.analyze() падає критично — пропагується
+                   до виклика (для лота — щоб інші лоти могли продовжити;
+                   для однолотової — щоб _run_pipeline повернув status=error
+                   як раніше, обробка на рівні виклика).
+    """
+    label = f"лот {lot_meta['suffix']}" if lot_meta else "закупівля"
+
+    # ── Крок 8: Базовий аналіз (Opus) ────────────────────────────────────────────
+    logger.info("Step 8/11: Running base analysis (Opus) [%s]...", label)
+    step8_start = time.time()
+    analysis = base_analyzer.analyze(
+        tender_info=tender_info,
+        td_texts=td_texts,
+        oopz_context=oopz_context,
+        qa_analysis=qa_analysis,
+        customer_profile=customer_profile,
+    )
+    logger.info(
+        "Base analysis done in %.1fs [%s]: verdict=%s  risk=%s  donors=%s",
+        time.time() - step8_start, label,
+        analysis.get('verdict'),
+        analysis.get('risk_level'),
+        analysis.get('donor_ids', []),
+    )
+
+    # contract_analysis прикріплюється до кожного lot-аналізу (scope='procurement')
+    lot_contract_analysis = contract_analysis
+
     # ── Крок 10: Форматування звітів ─────────────────────────────────────────────
-    logger.info("Step 10/11: Generating reports...")
-    output_dir = tender_dir / 'analysis'
+    logger.info("Step 10/11: Generating reports [%s]...", label)
     output_dir.mkdir(parents=True, exist_ok=True)
     try:
         format_result = report_formatter.format_reports(
             analysis=analysis,
-            contract_analysis=contract_analysis,
+            contract_analysis=lot_contract_analysis,
             output_dir=output_dir,
         )
-        # format_reports повертає ключі: analysis_json, analysis_report, тощо
         _skip = {'success', 'errors'}
         _files = {k: str(v) for k, v in format_result.items() if k not in _skip and v is not None}
         format_result['files'] = _files
-        logger.info("Reports generated: %s", list(_files.keys()))
+        logger.info("Reports generated [%s]: %s", label, list(_files.keys()))
         if format_result.get('errors'):
             for fmt_err in format_result['errors']:
-                logger.warning("Report formatter warning: %s", fmt_err)
+                logger.warning("Report formatter warning [%s]: %s", label, fmt_err)
             errors.extend(format_result['errors'])
     except Exception as e:
-        logger.error("Step 10 FAILED (report_formatter): %s", e, exc_info=True)
-        errors.append(f"report_formatter: {e}")
+        logger.error("Step 10 FAILED (report_formatter) [%s]: %s", label, e, exc_info=True)
+        errors.append(f"report_formatter[{label}]: {e}")
         format_result = {'files': {}, 'errors': [str(e)]}
 
     # ── Крок 11: Збереження в реєстр ─────────────────────────────────────────────
-    logger.info("Step 11/12: Registering result...")
+    logger.info("Step 11/12: Registering result [%s]...", label)
     try:
         registry.register_tender(
             public_id=public_id,
@@ -359,17 +608,25 @@ def _run_pipeline(
             subject=tender_info.get('title', ''),
             expected_value=tender_info.get('expected_value', 0.0),
             category=tender_info.get('category', ''),
-            folder_path=str(tender_dir),
+            folder_path=str(output_dir.parent if lot_meta else tender_dir),
             verdict=analysis.get('verdict', ''),
             short_summary=analysis.get('short_summary', ''),
+            lot_suffix=lot_meta['suffix'] if lot_meta else None,
+            lot_id=lot_meta['id'] if lot_meta else None,
+            lot_title=lot_meta['title'] if lot_meta else None,
         )
-        logger.info("Registered: %s", public_id)
+        logger.info("Registered [%s]: %s", label, public_id)
     except Exception as e:
-        logger.warning("Step 11 WARNING (registry): %s — result not saved to registry", e)
-        errors.append(f"registry_register: {e}")
+        logger.warning("Step 11 WARNING (registry) [%s]: %s — result not saved to registry", label, e)
+        errors.append(f"registry_register[{label}]: {e}")
 
     # ── Крок 12: Handoff до bid_researcher ───────────────────────────────────────
-    logger.info("Step 12/12: Sending handoff to bid_researcher...")
+    # ПРИМІТКА (backlog): handoff_sender.py наразі НЕ лот-обізнаний (файл
+    # заблокований паралельним субагентом) — надсилає той самий cpv_code для
+    # кожного лоту без розрізнення lot_id. Для однолотових закупівель це не
+    # проблема (поведінка ідентична старій). Справжній лот-обізнаний handoff —
+    # окреме завдання, див. звіт.
+    logger.info("Step 12/12: Sending handoff to bid_researcher [%s]...", label)
     try:
         handoff_id = handoff_sender.send_handoff(
             internal_id=internal_id,
@@ -379,32 +636,15 @@ def _run_pipeline(
             cpv_code=tender_info.get('dk_code', ''),
         )
         if handoff_id:
-            logger.info("Handoff sent: handoff_id=%s, td_path=%s", handoff_id, docs_dir)
+            logger.info("Handoff sent [%s]: handoff_id=%s, td_path=%s", label, handoff_id, docs_dir)
         else:
-            logger.warning("Handoff creation failed — bid_researcher не матиме чеклиста")
-            errors.append("handoff_sender: failed to create handoff")
+            logger.warning("Handoff creation failed [%s] — bid_researcher не матиме чеклиста", label)
+            errors.append(f"handoff_sender[{label}]: failed to create handoff")
     except Exception as e:
-        logger.warning("Step 12 WARNING (handoff_sender): %s", e)
-        errors.append(f"handoff_sender: {e}")
+        logger.warning("Step 12 WARNING (handoff_sender) [%s]: %s", label, e)
+        errors.append(f"handoff_sender[{label}]: {e}")
 
-    # ── Результат ─────────────────────────────────────────────────────────────────
-    duration = round(time.time() - start_time, 1)
-
-    return {
-        'status': 'completed',
-        'public_id': public_id,
-        'internal_id': internal_id,
-        'category': tender_info.get('category'),
-        'verdict': analysis.get('verdict'),
-        'risk_level': analysis.get('risk_level'),
-        'participate': analysis.get('participate'),
-        'appeal_deadline': analysis.get('appeal_deadline'),
-        'short_summary': analysis.get('short_summary'),
-        'output_dir': str(output_dir),
-        'reports': format_result.get('files', {}),
-        'duration_sec': duration,
-        'errors': errors,
-    }
+    return {'analysis': analysis, 'files': format_result.get('files', {})}
 
 
 if __name__ == '__main__':

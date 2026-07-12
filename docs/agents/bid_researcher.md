@@ -1,5 +1,5 @@
 # 📋 Bid Researcher
-**Status:** Production v3.3
+**Status:** Production v3.4
 **Role:** Second agent in the pipeline — analyzes participant bids for compliance with tender requirements
 
 ---
@@ -28,31 +28,30 @@ tender_doc_researcher → (checklist via agent_handoffs) → bid_researcher ← 
 checklist_receiver   → reads checklist + winner_checklist + path to tender documents
         ↓
 bid_loader           → downloads PDF/DOCX/.p7s/archives from ProZorro API
-                       classifies files by phase: proposal / correction_24h / winner
+                       classifies files by phase: proposal / correction_24h / winner / signing
         ↓
 extract_archives     → unpacks .zip/.rar/.7z; maps archive→contents
-                       Bank guarantee packages → separate folder with BG001_ prefix
+                       Bank guarantee packages → separate folder with BG001_/BS001_ prefix
         ↓
-office_converter     → converts DOCX→PDF, XLSX→CSV
+[STEP 3b] office_converter → converts DOCX→PDF, XLSX→CSV (Gemini rejects raw OOXML)
         ↓
-stage1_indexer       → 1 LLM call per file → doc_index.json
+[STEP 4 / STAGE 1] stage1_indexer → 1 LLM call per file, all phases → doc_index.json
         ↓
-correction_analyzer  → analyzes 24h correction documents
-        ↓
-winner_doc_analyzer  → indexes winner phase documents
-        ↓
-doc_compliance_verifier → DEEP content verification
-                       Coverage: bank guarantees (form compliance),
-                       Art. 16 criteria, qualification thresholds
-        ↓
-techspec_comparator  → FULL technical specification comparison
-                       Vision LLM (reads PDF scans as images)
+[STEP 4c] correction_analyzer  → analyzes 24h correction documents
+[STEP 4d] winner_doc_analyzer  → indexes winner phase documents + winner checklist
+[STEP 4e] techspec_comparator  → FULL technical specification comparison
+                       **ENSEMBLE: Gemini 2.5 Flash + Gemini 3.5 Flash (default, union of
+                       findings)**; GPT-5.1 (OpenAI, vision) as fallback via TECHSPEC_LLM=openai.
                        Buyer's specification = reference standard; participant's
-                       specification extracted verbatim
+                       specification extracted verbatim from scans (PyMuPDF → images)
+[STEP 4f] doc_compliance_verifier → DEEP content verification (Gemini 2.5 Flash)
+                       Coverage: bank guarantee (ALL phases) + Art. 16 qualification
+                       criteria (experience/equipment/personnel/finance), driven by the
+                       requires_content_verification flag set by tender_doc_researcher
         ↓
 sieve1_simple        → 1 text call → confirmed / pending
         ↓
-sieve2_tabular       → batches of 8 PDFs + category routing
+sieve2_tabular       → batches of 8 PDFs + category routing + TechSpecComparator audit
         ↓
 sieve3_scans         → batches of 8 PDFs + sieve 3 context
         ↓
@@ -61,7 +60,7 @@ arbitrator           → sequential per unresolved document → ✅ / ❌ / ⚠�
 final_report         → 1 LLM call (synthesis) → analysis.json
         ↓
 _enrich_final_analysis → deterministic enrichment (no AI):
-                       • technical specs from TechSpecComparator
+                       • technical specs from TechSpecComparator (with escalation to review)
                        • SAFEGUARD for bank guarantees
                        • archive↔content linking
         ↓
@@ -73,6 +72,15 @@ report_generator     → validation → Node.js generate_docx.js → JSON + DOCX
         ↓
 db_manager           → bid_documents + bid_analysis (UPSERT)
 ```
+
+**Three-model split (by design, not a migration in progress):** the main cascade (Stage 1,
+sieves, arbitrator, correction/winner/final_report) runs on the lightweight
+`gemini-3.1-flash-lite-preview` for speed and cost. Technical specification comparison (step
+4e) — the highest-stakes check for goods/equipment tenders — runs on a **2.5+3.5 Flash
+ensemble** by default, escalating to GPT-5.1 vision only if configured. Document content
+verification (step 4f) runs on `gemini-2.5-flash`, because the lite model reliably *describes*
+files but does not reliably detect missing or non-conforming form elements
+(echo/pattern-completion failure mode, confirmed on a bank guarantee test case).
 
 ---
 
@@ -196,29 +204,36 @@ bid_researcher/procurements/{public_id}/analysis/
 
 ---
 
-## 📄 DOCX Report Structure (15+ chapters)
+## 📄 DOCX Report Structure (18+ chapters)
+
+⚠️ **Order verified literally against the rendering code** (`TESTS/test_report_structure.py`,
+constant `CANON_SECTIONS`, checked against real `generate_docx.js` output) as part of the
+06.07.2026 report-routing audit fix, 10.07.2026. Sections marked "conditional" below are not
+always present — only "always" sections render unconditionally.
 
 | # | Chapter | Condition |
 |---|---------|-----------|
-| 0 | Header (tender, participant, price, key dates, auction table) | Always |
+| 0 | Header (tender, participant, price, key dates with appeal deadline in red, auction table) | Always |
 | 1 | Statistics (5 metric cards) | Always |
-| 2 | Executive summary (verdict for buyer + analytics) | Always |
+| 2 | Executive summary (verdict for buyer + analyst) | Always |
 | 3 | Compliance table (7 columns, strikethrough for corrected items) | Always |
 | 3a | Bank guarantee analysis (form compliance vs. tender annex) | If BG present |
-| 3b | Buyer assessment (24h notice with deficiency text) | If issued |
-| 3c | Correction documents (resolved/unresolved per item) | If corrections exist |
-| 4 | Technical specifications (deviations, added items, audit notes) | If tech spec exists |
+| 3b | Buyer assessment (extension/24h milestones with deficiency text) | If issued |
+| 3c | Correction documents ("resolves issue?" column) | If corrections exist |
+| 4 | Technical specifications (4.1 added clauses, 4.2 sieve2 audit notes) | If tech spec / added clauses / audit present |
 | 5 | Personnel and equipment matrix | If present |
-| 6 | Document validity periods | Always |
-| 7 | Composite documents | If present |
-| 8 | Additional documents | If present |
-| 8a | Full document list (all files with type and summary) | Always |
-| 9 | Winner documents (award phase) | If present |
-| 9a | Winner document checklist results | If present |
-| 9b | Contract signing documents | If present |
+| 6 | Document validity periods | If present (not always) |
+| 7 | Documents outside checklist, per-document (table7) | If present |
+| 7a | Composite documents (confirmed within another document) | If present |
+| 8 | Extra documents (no checklist match — distinct selection logic from §7) | If present |
+| 8a | Full document list (all files, all phases, with type and summary) | Always in practice when files exist |
+| 9 | Winner documents (award phase only) | If present |
+| 9a | Winner document checklist results (block BW04 only) | If present |
+| 9b | Contract signing documents + BG signing status block | If present |
 | 10 | Analytics block | Always |
 | 11 | Legal block (for buyer + for analyst) | Always |
-| 12 | Digital signatures (including inherited) | If present |
+| 12 | Participant qualification | If present |
+| 13 | Digital signatures (including inherited via archive/Office) | If present |
 | — | Footer (disclaimer + pipeline statistics) | Always |
 
 ---
@@ -227,8 +242,22 @@ bid_researcher/procurements/{public_id}/analysis/
 
 | Code | Meaning |
 |------|---------|
-| **C** | Compliant — document present and meets requirements |
+| **В** | Compliant — document present and meets requirements |
 | **24** | 24h correction — present but correctable deficiency |
-| **R** | Rejected — critical non-compliance |
-| **CR** | Conditional review — requires user verification |
-| **M** | Missing — document or information not submitted |
+| **В!** | Rejection — critical non-compliance |
+| **УК** | Conditional — requires user verification |
+| **ВД** | Missing — document or information not submitted |
+
+Automated, deterministic escalations to `УК` (never softened back down): **SAFEGUARD** — an
+empty bank-guarantee placeholder chosen instead of the real high-confidence match; **TechSpec
+escalation** — full comparison or sieve2 audit found deviations/gaps.
+
+---
+
+## 📊 Test Coverage
+
+326/326 Python tests + 4/4 Node.js tests green (10.07.2026), including a dedicated 27-test
+suite covering the 06.07.2026 report-routing audit fixes and a 20-test suite covering
+content-verification/acceptance fixes (SEC3 checklist-match bridge, target_phases, techspec
+override, table 7 near-duplicate handling).
+

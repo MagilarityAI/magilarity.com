@@ -2,68 +2,88 @@
 
 ---
 
-## ✅ Phase 1 — Production Agents (Complete)
+## ✅ Phase 1 — Production Agents (Complete, with 06–10.07.2026 repair pass)
 
 | Agent | Status | Purpose |
 |-------|--------|---------|
-| `oopz_researcher` | ✅ v2.0 | PPOU decision analysis — building regulatory precedent database |
-| `tender_doc_researcher` | ✅ v3.2 | Tender documentation analysis — 16 legal criteria, 13 categories |
-| `bid_researcher` | ✅ v3.3 | Bid compliance analysis — document verification, tech spec comparison |
+| `oopz_researcher` | ✅ v2.0 (repaired 07-08.07.2026) | PPOU decision analysis — building regulatory precedent database; now actually writes to its own knowledge table (`oopz_decisions`, previously a dead link), 125 tests |
+| `tender_doc_researcher` | ✅ v4.0 (repaired 09.07.2026) | Tender documentation analysis — 16 legal criteria, 13 categories, multi-lot support, working amendments chain, 273 tests |
+| `bid_researcher` | ✅ v3.4 (routing fixes 10.07.2026) | Bid compliance analysis — document verification, tech spec comparison, 326 tests |
+
+A June 2026 audit found that several of these production agents had components documented as
+working but not actually wired into the pipeline (e.g. oopz_researcher's knowledge table write
+was a dead link on both ends). The 06–10.07.2026 session repaired all four agents below against
+that audit; test suites listed above reflect the post-repair regression baseline.
 
 ---
 
 ## 🔄 In Development — Phase 1 Completion
 
-### amku_researcher (90% complete)
-Research and analysis of Anti-Monopoly Committee of Ukraine (AMCU) decisions on anti-competitive concerted actions in public procurement.
+### amku_researcher (core pipeline repaired 07.07.2026)
+Research and analysis of Anti-Monopoly Committee of Ukraine (AMCU) decisions on anti-competitive concerted actions in public procurement. Full-text Gemini 2.5 analysis, prompt v2 (evidence + respondents' objections + AMCU's refutation + norms), dedicated knowledge table `amku_bid_rigging_knowledge`, 70 tests. Remaining before "complete": live validation of prompt v2 on real decisions, then mass backfill — this blocks `investigation`'s few-shot synthesis.
 
 ---
 
-### td_generator — Tender Documentation Generator
-Generates compliant tender documentation using the requirements database accumulated from tender_doc_researcher analyses. The database records which requirements are used in which procurement categories, creating a data-driven template system.
+### complaint_researcher — designed, not started
+Sixth agent: reviews PPOU complaints and drafts a decision proposal for a human specialist
+(the argument is the unit of evaluation; natural eval set = historical complaints).
+Architecture designed 07.07.2026. Precondition: `oopz_researcher` repair (complete as of
+08.07.2026) — this agent consumes the same knowledge table.
 
-**Data source:** `prozorro_intel.td_requirements` table — automatically populated during each tender_doc_researcher run:
-- Requirement text
-- CPV category
-- Usage count across tenders
-- Whether the requirement is legally permissible
+---
+
+### td_creator — Tender Documentation Builder for Public Buyers (designed 10.07.2026)
+The first agent serving the BUYER side: procurement type → category's baseline requirements
+(auto-checked by frequency) → optional requirements with LIVE risk warnings (precedents
+from real PPOU rulings + safer wording suggestions) → parameters with category medians /
+safe ranges → draft tender documentation (Word) + cover note. The normative skeleton is
+the officially approved model TD form plus category-specific regulations. Two modes: from
+scratch / from the buyer's own draft. Generated TD gets a self-check by our own analyzer
+(tender_doc_researcher) — "through the eyes of a bidder and a complainant" before publication.
+
+**Requirements base:** populated by mass processing of real TDs (lightweight Gemini
+extraction mode) + as a by-product of every tender_doc_researcher run; requirements are
+stored canonically (frequencies, parameters, risk profiles linked to the PPOU rulings
+base). UI — Streamlit MVP.
 
 ---
 
 ### investigation — Collusion Investigation Orchestrator
-Full 10-stage pipeline for detecting procurement violations:
+**Status:** architecture v2 designed 07.07.2026, cross-checked node-by-node against the drawio
+diagram (Phase 0 scoping checkpoint, early requirements, EDR lookup moved to Phase 1). Code not
+yet started. Depends on `amku_researcher`'s knowledge table being populated (few-shot source
+for synthesis) and on `oopz_researcher`'s precedent table (both now structurally ready after
+the 06–10.07.2026 repair pass).
 
-| Stage | Analysis |
-|-------|----------|
-| 1-3 | Tender identification, participant analysis |
-| 4 | Decision point: violation indicators detected? |
-| 5 | Deep analysis: IP correlation, submission timing, metadata |
-| 6 | Financial connections, bank guarantee sequences |
-| 7 | Document technical analysis: identical errors, shared templates |
-| 8 | Financial analysis: price patterns, financial ties |
-| 9 | Decision point: sufficient evidence? |
-| 10 | Evidence synthesis → AMCU complaint package |
+Architecture v2 follows the official AMCU case officer's methodology (verified node-by-node
+against the evidentiary flow diagram) and runs in three phases:
 
-**9 violation categories:**
-- Price fixing (price coordination, winner rotation)
-- Technical coordination (identical specifications, shared errors)
-- Market division (geographic/category allocation)
-- Participant discrimination (unlawful barriers)
-- Conflict of interest (buyer affiliation)
-- Sham competition (shell participants)
-- Document manipulation (falsification)
-- Deadline violations
-- Other procedural violations
+| Phase | Content |
+|-------|---------|
+| Phase 0 — Scoping | tender universe of the subjects → summary tables → checkpoint: the case officer narrows the investigation scope |
+| Phase 1 — Prozorro analysis | matrices of shared traits across participants: file properties, upload timing, identical/duplicate documents, contact details, shared staff/equipment, synchronized actions, pricing behavior + generation of the official information request package (tax authority / pension fund / banks / marketplaces) |
+| Phase 2 — Authority responses | ingestion of official responses (IP addresses, e-mails, financial links) → final synthesis |
 
-**4 legal strategies:** Aggressive (30-50% success), Moderate (50-70%), Conservative (70-85%), Settlement (85-95%)
+**The conclusion covers 10 mandatory points** (each one: presence OR substantiated absence
+of the trait; completeness is enforced deterministically — no point can be silently
+skipped) → draft AMCU submission. Every piece of evidence is a verbatim quote with an
+exact source. MVP scope — bid rigging only (Art. 6(2)(4) of the Law of Ukraine "On
+Protection of Economic Competition").
 
 ---
 
-### bid_doc_preparer — Participant Document Package Preparation
-Prepares complete document packages for tender participants based on:
-- Checklist from tender_doc_researcher
-- Document templates
-- Participant's existing document archive
+### bid_creator — Bid Document Package Generator for Participants (designed 10.07.2026)
+The eighth agent, mirroring td_creator on the supplier side: generates the bid document
+package from the tender_doc_researcher requirements checklist. Simple documents
+(certificates, guarantee letters, consents) — generated fully, each one verbatim-anchored
+to the specific TD requirement it satisfies; complex ones (technical specifications, bank
+guarantee) — honestly "the user's responsibility" with maximum assistance (a bank
+application pre-filled with TD parameters, "where to obtain" checklists). Organization
+profile with a permanent document vault and expiry tracking; style variability + a
+mandatory disclaimer; phase packages following the tender chronology (24-hour correction
+regeneration driven by the bid_researcher report, winner documents with deadlines,
+contract signing). Independent self-check of the generated package by the bid_researcher
+verifier. Multi-tenant for external users. UI — Streamlit MVP.
 
 ---
 
@@ -93,22 +113,25 @@ Integration with YouControl — Ukraine's corporate information platform — for
 - Buyer behavior prediction for new tenders
 - Categorization: trusted / caution / high_risk
 
-**PPOU Complaint Review Agent**
-- AI assistant for PPOU collegium members during complaint review
-- Automatic search for analogous precedents
-- Draft operative and reasoning parts of the decision
-- Ensuring consistency of PPOU practice
+**PPOU Complaint Review Agent** — see `complaint_researcher` in Phase 1 above (designed
+07.07.2026; this item covers its evolution into a full collegium tool once the precedent
+base is populated).
 
 **Automated PPOU Complaint Submission**
 - Full complaint package generation based on tender_doc_researcher analysis
 - Automatic form filling
 - Review status tracking
 
-**Web Interface and User Dashboard**
-- Streamlit → full React frontend
-- Personal account with analysis history
-- Analytics dashboard for law firms
-- Third-party integration API
+**Platform: User Cabinets + Backend (DESIGNED 11-12.07.2026)**
+- Two user types: PARTICIPANT (cabinet: entry from a tender number, phase-driven journey —
+  analysis → package → 24-hour window → award → contract) and BUYER (TD builder: entry
+  from a procurement type, step-by-step wizard) — full screen concepts + live HTML mockups ready
+- Shared backend: FastAPI + task queue for long-running analyses + auth + billing
+  (subscriptions with quotas + metered premium actions) + Telegram notifications
+  (deadlines, buyer's mandatory actions, "your result is ready")
+- Strategy: everything on Streamlit first → full frontend later via the same APIs
+- Internal tooling: knowledge-base operator console (review desk, batch processing with
+  budget control), news & weekly appeal-statistics module with a PPOU practice-shift detector
 
 ---
 

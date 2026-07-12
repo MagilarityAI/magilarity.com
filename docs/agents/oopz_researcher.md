@@ -38,6 +38,7 @@ tender_doc_researcher → uses precedents when analyzing new tenders
 | 8 | Generate reports (DOCX + JSON + metadata) |
 | 9 | Update Excel registries (2 files with dynamic columns) |
 | 10 | Save to `agent_memory` database |
+| 10.5 | Write to knowledge table `appdb.oopz_decisions` (added 07.07.2026) |
 
 ---
 
@@ -120,7 +121,7 @@ LIMIT 5
 ## 📁 Output Files per Decision
 
 ```
-output/oopz_decisions/YEAR/MONTH/PROCUREMENT_ID/
+output/oopz_decisions/registry/YEAR/MONTH/PROCUREMENT_ID/
 ├── analysis.json               ← Structured analysis for agents
 ├── metadata.json               ← Decision metadata
 ├── detailed_report_{N}.docx    ← Full DOCX report for human review

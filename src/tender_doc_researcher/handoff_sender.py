@@ -12,6 +12,7 @@
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -55,7 +56,19 @@ def send_handoff(
         "td_documents_path": td_documents_path,
     }
 
-    conn = _get_memory_conn()
+    try:
+        conn = _get_memory_conn()
+    except Exception as exc:
+        logger.error("handoff: не вдалось підключитись до agent_memory: %s", exc)
+        _write_file_fallback(
+            internal_id=internal_id,
+            public_id=public_id,
+            td_documents_path=td_documents_path,
+            context_data=context_data,
+            reason=str(exc),
+        )
+        return None
+
     try:
         with conn.cursor() as cur:
             cur.execute("SET search_path TO agent_memory")
@@ -78,11 +91,15 @@ def send_handoff(
 
             if row:
                 handoff_id = row[0]
+                # УВАГА (баг-фікс 09.07.2026): agent_memory.agent_handoffs НЕ має
+                # колонки updated_at (перевірено information_schema.columns —
+                # реальні колонки: created_at, accepted_at, completed_at). Раніше
+                # тут стояв `updated_at = NOW()` → UndefinedColumn на кожному
+                # оновленні pending-handoff (100% реальний баг, не застарілий тест).
                 cur.execute(
                     """
                     UPDATE agent_handoffs
-                    SET context_data = %s::jsonb,
-                        updated_at   = NOW()
+                    SET context_data = %s::jsonb
                     WHERE handoff_id = %s::uuid
                     """,
                     (json.dumps(context_data, ensure_ascii=False), handoff_id),
@@ -123,9 +140,66 @@ def send_handoff(
             conn.rollback()
         except Exception:
             pass
+        # Файловий резерв (09.07.2026, фікс аудиту розділ 2): CLAUDE.md
+        # заявляв "Файловий спосіб (РЕЗЕРВНИЙ)" але коду не було — БД-збій
+        # означав повну втрату handoff без жодного сліду. Пишемо мінімальний
+        # JSON поряд з папкою закупівлі — bid_researcher (або оператор) може
+        # підхопити вручну; не піднімаємо виключення, як і раніше (graceful).
+        _write_file_fallback(
+            internal_id=internal_id,
+            public_id=public_id,
+            td_documents_path=td_documents_path,
+            context_data=context_data,
+            reason=str(exc),
+        )
         return None
     finally:
         conn.close()
+
+
+def _write_file_fallback(
+    internal_id: str,
+    public_id: str,
+    td_documents_path: str,
+    context_data: dict,
+    reason: str,
+) -> None:
+    """
+    Записує JSON-резерв handoff у папку закупівлі, коли БД agent_handoffs
+    недоступна/повернула помилку. Не кидає виключень — best-effort.
+
+    Розташування: {tender_dir}/analysis/handoff_pending.json, де tender_dir —
+    батьківська папка td_documents_path (=.../tender_documents/..).
+    """
+    try:
+        docs_dir = Path(td_documents_path)
+        tender_dir = docs_dir.parent if docs_dir.name == "tender_documents" else docs_dir
+        analysis_dir = tender_dir / "analysis"
+        analysis_dir.mkdir(parents=True, exist_ok=True)
+
+        fallback_path = analysis_dir / "handoff_pending.json"
+        payload = {
+            "source": "tender_doc_researcher",
+            "reason": "db_unavailable",
+            "db_error": reason,
+            "internal_id": internal_id,
+            "public_id": public_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "context_data": context_data,
+        }
+        fallback_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        logger.warning(
+            "handoff: БД недоступна — записано файловий резерв %s "
+            "(bid_researcher має підхопити вручну)",
+            fallback_path,
+        )
+    except Exception as exc:
+        logger.error(
+            "handoff: не вдалось записати файловий резерв (%s) — handoff ВТРАЧЕНО: %s",
+            td_documents_path, exc,
+        )
 
 
 def _build_checklist(document_blocks: list) -> list:
@@ -162,7 +236,9 @@ def _build_checklist(document_blocks: list) -> list:
         if stage not in ("proposal", ""):
             continue
 
-        block_id = block.get("block_id", "")
+        # block_id зазвичай рядок формату "B01" (реальний формат від LLM), але
+        # толеруємо int — приводимо до рядка для консистентного item_key.
+        block_id = str(block.get("block_id", ""))
         block_name = block.get("block_name", "")
         items = block.get("items", [])
 
@@ -213,7 +289,10 @@ def _build_winner_checklist(document_blocks: list) -> list:
         if stage not in winner_stages:
             continue
 
-        raw_block_id = block.get("block_id", "")
+        # block_id зазвичай рядок формату "B01" (реальний формат від LLM, див.
+        # prompts/base_prompt.py OUTPUT_FORMAT), але толеруємо і int (легасі/інші
+        # провайдери) — приводимо до рядка перед перевіркою префіксу.
+        raw_block_id = str(block.get("block_id", ""))
         # Додаємо префікс "W" якщо block_id не починається з "BW"
         block_id = raw_block_id if raw_block_id.startswith("BW") else f"BW{raw_block_id.lstrip('B')}"
         block_name = block.get("block_name", "")
@@ -240,6 +319,11 @@ def _build_winner_checklist(document_blocks: list) -> list:
                 "is_hidden":    bool(item.get("is_hidden", False)),
                 "risk_flag":    bool(item.get("risk_flag", False)),
                 "stage":        stage,
+                # Прапорець глибокої звірки вмісту — пробрасується так само, як
+                # для основного чеклиста пропозиції (_build_checklist), фікс
+                # аудиту 09.07.2026: раніше winner-пункти цих полів не мали.
+                "requires_content_verification": bool(item.get("requires_content_verification", False)),
+                "verification_focus": item.get("verification_focus") or None,
             })
 
     return checklist

@@ -113,20 +113,30 @@ def _call_claude(prompt: str, role: str, max_tokens: Optional[int], max_retries:
 
 # ── OpenAI ────────────────────────────────────────────────────────────────────
 
-def _call_openai(prompt: str, role: str, max_tokens: Optional[int], max_retries: int) -> str:
+def _call_openai(
+    prompt: str,
+    role: str,
+    max_tokens: Optional[int],
+    max_retries: int,
+    json_mode: Optional[bool] = None,
+) -> str:
     from openai import OpenAI, RateLimitError, APIError as OpenAIAPIError
 
     _client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
     model = get_model(role)
 
-    # gpt-5-mini: no temperature (only default=1), json_object mode requires "json" in prompt
+    # gpt-5-mini: no temperature (only default=1)
+    # response_format=json_object вимагає слово "json" десь у промпті (OpenAI API).
+    # json_mode=None (default) — стара евristика 'json' in prompt.lower(), зберігає
+    # поточну поведінку. json_mode=True/False — явний контроль викликаючою стороною.
     create_kwargs: dict = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
     }
     if max_tokens is not None:
         create_kwargs["max_completion_tokens"] = max_tokens
-    if 'json' in prompt.lower():
+    use_json_mode = json_mode if json_mode is not None else ('json' in prompt.lower())
+    if use_json_mode:
         create_kwargs["response_format"] = {"type": "json_object"}
     if 'mini' not in model:
         create_kwargs["temperature"] = 0.1
@@ -214,6 +224,7 @@ def call_llm(
     role: str = 'analysis',
     max_tokens: Optional[int] = 16000,
     max_retries: int = 13,
+    json_mode: Optional[bool] = None,
 ) -> str:
     """
     Уніфікований виклик LLM — прозоро перемикається між Claude/OpenAI/Gemini.
@@ -223,6 +234,11 @@ def call_llm(
         role:        'analysis' | 'classification'
         max_tokens:  Максимум токенів у відповіді.
         max_retries: Кількість повторів при помилці API.
+        json_mode:   Тільки для OpenAI: чи вмикати response_format=json_object.
+                     None (default) — стара евристика 'json' in prompt.lower()
+                     (зберігає поточну поведінку без змін). True/False — явний
+                     контроль викликаючою стороною. Ігнорується для claude/gemini
+                     (Claude не має json_object режиму; Gemini завжди JSON mime).
 
     Returns:
         Текстова відповідь LLM або '' при невдачі.
@@ -251,5 +267,5 @@ def call_llm(
     if provider == 'claude':
         return _call_claude(prompt, role, max_tokens, max_retries)
     if provider == 'openai':
-        return _call_openai(prompt, role, max_tokens, max_retries)
+        return _call_openai(prompt, role, max_tokens, max_retries, json_mode=json_mode)
     return _call_gemini(prompt, role, max_tokens, max_retries)
